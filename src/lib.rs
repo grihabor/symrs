@@ -1,3 +1,7 @@
+use num::Integer;
+use std::fmt::{Binary, Debug, Display, Formatter, Pointer, Write};
+use std::ops::Deref;
+
 #[derive(Debug)]
 enum Expr {
     Symbol(Symbol),
@@ -8,6 +12,12 @@ enum Expr {
 #[derive(Debug)]
 struct Symbol {
     name: String,
+}
+
+impl Display for Symbol {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name.as_str())
+    }
 }
 
 impl From<&str> for Symbol {
@@ -24,16 +34,79 @@ struct Add {
     lhs: Box<Expr>,
 }
 
+impl Display for Add {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        binary_op_fmt(self, f)
+    }
+}
+
+impl BinaryOp for &Add {
+    fn rhs(&self) -> &Expr {
+        return self.rhs.deref();
+    }
+
+    fn lhs(&self) -> &Expr {
+        return self.lhs.deref();
+    }
+
+    fn op(&self) -> &str {
+        "-"
+    }
+}
+
+trait BinaryOp {
+    fn rhs(&self) -> &Expr;
+    fn lhs(&self) -> &Expr;
+    fn op(&self) -> &str;
+}
+
+fn binary_op_fmt<T: BinaryOp>(op: T, f: &mut Formatter<'_>) -> std::fmt::Result {
+    f.write_char('(')
+        .and(<Expr as Display>::fmt(op.lhs(), f))
+        .and(f.write_str(op.op()))
+        .and(<Expr as Display>::fmt(op.rhs(), f))
+        .and(f.write_char(')'))
+}
+
 #[derive(Debug)]
 struct Sub {
     rhs: Box<Expr>,
     lhs: Box<Expr>,
 }
 
+impl BinaryOp for &Sub {
+    fn rhs(&self) -> &Expr {
+        return self.rhs.deref();
+    }
+
+    fn lhs(&self) -> &Expr {
+        return self.lhs.deref();
+    }
+
+    fn op(&self) -> &str {
+        "-"
+    }
+}
+
+impl Display for Sub {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        binary_op_fmt(self, f)
+    }
+}
+
 #[derive(Debug)]
 enum MathOp {
     Add(Add),
     Sub(Sub),
+}
+
+impl Display for MathOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MathOp::Add(add) => <Add as Display>::fmt(add, f),
+            MathOp::Sub(sub) => <Sub as Display>::fmt(sub, f),
+        }
+    }
 }
 
 impl std::ops::Add for Expr {
@@ -54,7 +127,17 @@ impl std::ops::Sub for Expr {
         return Expr::MathOp(MathOp::Sub(Sub {
             lhs: Box::new(self),
             rhs: Box::new(rhs),
-        }))
+        }));
+    }
+}
+
+impl Display for Expr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Expr::Integer(i) => <i64 as Display>::fmt(i, f),
+            Expr::Symbol(s) => <Symbol as Display>::fmt(s, f),
+            Expr::MathOp(op) => <MathOp as Display>::fmt(op, f),
+        }
     }
 }
 
@@ -94,5 +177,17 @@ mod tests {
             Expr::MathOp(MathOp::Sub(_)) => true,
             _ => false,
         })
+    }
+
+    #[test]
+    fn sub_display() {
+        let result = Symbol("x".into()) - Integer(1);
+        assert_eq!(result.to_string(), "(x-1)")
+    }
+
+    #[test]
+    fn add_display() {
+        let result = Integer(1) + Symbol("x".into());
+        assert_eq!(result.to_string(), "(1-x)")
     }
 }
