@@ -25,8 +25,15 @@ struct Add {
 }
 
 #[derive(Debug)]
+struct Sub {
+    rhs: Box<Expr>,
+    lhs: Box<Expr>,
+}
+
+#[derive(Debug)]
 enum MathOp {
     Add(Add),
+    Sub(Sub),
 }
 
 impl std::ops::Add for Expr {
@@ -40,10 +47,22 @@ impl std::ops::Add for Expr {
     }
 }
 
+impl std::ops::Sub for Expr {
+    type Output = Expr;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        return Expr::MathOp(MathOp::Sub(Sub {
+            lhs: Box::new(self),
+            rhs: Box::new(rhs),
+        }))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::Expr;
     use crate::Expr::{Integer, Symbol};
+    use crate::MathOp;
 
     #[test]
     fn it_works() {
@@ -63,7 +82,16 @@ mod tests {
     fn add_symbols() {
         let result = Symbol("x".into()) + Symbol("x".into());
         assert!(match result {
-            Expr::MathOp(_) => true,
+            Expr::MathOp(MathOp::Add(_)) => true,
+            _ => false,
+        })
+    }
+
+    #[test]
+    fn sub_symbols() {
+        let result = Symbol("x".into()) - Integer(1);
+        assert!(match result {
+            Expr::MathOp(MathOp::Sub(_)) => true,
             _ => false,
         })
     }
