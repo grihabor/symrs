@@ -134,7 +134,7 @@ impl std::ops::Mul for Expr {
         return Expr::MathOp(MathOp::Mul(Mul {
             lhs: Box::new(self),
             rhs: Box::new(rhs),
-        }))
+        }));
     }
 }
 
