@@ -125,6 +125,7 @@ enum MathOp {
     Add(Add),
     Sub(Sub),
     Mul(Mul),
+    Div(Div),
 }
 
 impl std::ops::Mul for Expr {
@@ -144,6 +145,7 @@ impl Display for MathOp {
             MathOp::Add(add) => <Add as Display>::fmt(add, f),
             MathOp::Sub(sub) => <Sub as Display>::fmt(sub, f),
             MathOp::Mul(mul) => <Mul as Display>::fmt(mul, f),
+            MathOp::Div(div) => <Div as Display>::fmt(div, f),
         }
     }
 }
@@ -177,6 +179,43 @@ impl Display for Expr {
             Expr::Symbol(s) => <Symbol as Display>::fmt(s, f),
             Expr::MathOp(op) => <MathOp as Display>::fmt(op, f),
         }
+    }
+}
+
+#[derive(Debug)]
+struct Div {
+    lhs: Box<Expr>,
+    rhs: Box<Expr>,
+}
+
+impl Display for Div {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        binary_op_fmt(self, f)
+    }
+}
+
+impl BinaryOp for &Div {
+    fn rhs(&self) -> &Expr {
+        self.rhs.deref()
+    }
+
+    fn lhs(&self) -> &Expr {
+        self.lhs.deref()
+    }
+
+    fn op(&self) -> &str {
+        return "/";
+    }
+}
+
+impl std::ops::Div for Expr {
+    type Output = Expr;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        Expr::MathOp(MathOp::Div(Div {
+            lhs: Box::new(self),
+            rhs: Box::new(rhs),
+        }))
     }
 }
 
@@ -234,5 +273,11 @@ mod tests {
     fn mul_display() {
         let result = Integer(1) * Symbol("x".into());
         assert_eq!(result.to_string(), "(1*x)")
+    }
+
+    #[test]
+    fn div_display() {
+        let result = Integer(1) / Symbol("x".into());
+        assert_eq!(result.to_string(), "(1/x)")
     }
 }
