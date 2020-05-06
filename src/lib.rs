@@ -50,7 +50,7 @@ impl BinaryOp for &Add {
     }
 
     fn op(&self) -> &str {
-        "-"
+        "+"
     }
 }
 
@@ -188,6 +188,6 @@ mod tests {
     #[test]
     fn add_display() {
         let result = Integer(1) + Symbol("x".into());
-        assert_eq!(result.to_string(), "(1-x)")
+        assert_eq!(result.to_string(), "(1+x)")
     }
 }
