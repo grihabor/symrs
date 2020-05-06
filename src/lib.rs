@@ -95,9 +95,47 @@ impl Display for Sub {
 }
 
 #[derive(Debug)]
+struct Mul {
+    rhs: Box<Expr>,
+    lhs: Box<Expr>,
+}
+
+impl BinaryOp for &Mul {
+    fn rhs(&self) -> &Expr {
+        self.rhs.deref()
+    }
+
+    fn lhs(&self) -> &Expr {
+        self.lhs.deref()
+    }
+
+    fn op(&self) -> &str {
+        "*"
+    }
+}
+
+impl Display for Mul {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        binary_op_fmt(self, f)
+    }
+}
+
+#[derive(Debug)]
 enum MathOp {
     Add(Add),
     Sub(Sub),
+    Mul(Mul),
+}
+
+impl std::ops::Mul for Expr {
+    type Output = Expr;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        return Expr::MathOp(MathOp::Mul(Mul {
+            lhs: Box::new(self),
+            rhs: Box::new(rhs),
+        }))
+    }
 }
 
 impl Display for MathOp {
@@ -105,6 +143,7 @@ impl Display for MathOp {
         match self {
             MathOp::Add(add) => <Add as Display>::fmt(add, f),
             MathOp::Sub(sub) => <Sub as Display>::fmt(sub, f),
+            MathOp::Mul(mul) => <Mul as Display>::fmt(mul, f),
         }
     }
 }
@@ -189,5 +228,11 @@ mod tests {
     fn add_display() {
         let result = Integer(1) + Symbol("x".into());
         assert_eq!(result.to_string(), "(1+x)")
+    }
+
+    #[test]
+    fn mul_display() {
+        let result = Integer(1) * Symbol("x".into());
+        assert_eq!(result.to_string(), "(1*x)")
     }
 }
