@@ -15,6 +15,13 @@ impl Expr {
             operand: Box::new(operand),
         }))
     }
+
+    fn new_pow(lhs: Expr, rhs: Expr) -> Expr {
+        Expr::MathOp(MathOp::Pow(Pow {
+            rhs: Box::new(rhs),
+            lhs: Box::new(lhs),
+        }))
+    }
 }
 
 #[derive(Debug)]
@@ -108,6 +115,13 @@ enum MathOp {
     Neg(Neg),
     Mul(Mul),
     Div(Div),
+    Pow(Pow),
+}
+
+#[derive(Debug)]
+struct Pow {
+    rhs: Box<Expr>,
+    lhs: Box<Expr>,
 }
 
 #[derive(Debug)]
@@ -134,6 +148,26 @@ impl std::ops::Mul for Expr {
     }
 }
 
+impl BinaryOp for &Pow {
+    fn rhs(&self) -> &Expr {
+        self.rhs.deref()
+    }
+
+    fn lhs(&self) -> &Expr {
+        self.lhs.deref()
+    }
+
+    fn op(&self) -> &str {
+        "^"
+    }
+}
+
+impl Display for Pow {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        binary_op_fmt(self, f)
+    }
+}
+
 impl Display for MathOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -141,6 +175,7 @@ impl Display for MathOp {
             MathOp::Neg(neg) => <Neg as Display>::fmt(neg, f),
             MathOp::Mul(mul) => <Mul as Display>::fmt(mul, f),
             MathOp::Div(div) => <Div as Display>::fmt(div, f),
+            MathOp::Pow(pow) => <Pow as Display>::fmt(pow, f),
         }
     }
 }
@@ -214,11 +249,20 @@ impl std::ops::Div for Expr {
     }
 }
 
+impl num::traits::pow::Pow<Expr> for Expr {
+    type Output = Expr;
+
+    fn pow(self, rhs: Self) -> Self::Output {
+        Expr::new_pow(self, rhs)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::Expr;
     use crate::Expr::{Integer, Symbol};
     use crate::MathOp;
+    use num::traits::pow::Pow;
 
     #[test]
     fn it_works() {
@@ -265,5 +309,11 @@ mod tests {
     fn div_display() {
         let result = Integer(1) / Symbol("x".into());
         assert_eq!(result.to_string(), "(1/x)")
+    }
+
+    #[test]
+    fn pow_display() {
+        let result = Symbol("x".into()).pow(Integer(2));
+        assert_eq!(result.to_string(), "(x^2)")
     }
 }
