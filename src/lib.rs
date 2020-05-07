@@ -128,7 +128,6 @@ enum MathOp {
     Add(Add),
     Neg(Neg),
     Mul(Mul),
-    Div(Div),
     Pow(Pow),
 }
 
@@ -185,7 +184,6 @@ impl Display for MathOp {
             MathOp::Add(add) => <Add as Display>::fmt(add, f),
             MathOp::Neg(neg) => <Neg as Display>::fmt(neg, f),
             MathOp::Mul(mul) => <Mul as Display>::fmt(mul, f),
-            MathOp::Div(div) => <Div as Display>::fmt(div, f),
             MathOp::Pow(pow) => <Pow as Display>::fmt(pow, f),
         }
     }
@@ -217,40 +215,11 @@ impl Display for Expr {
     }
 }
 
-#[derive(Debug)]
-struct Div {
-    lhs: Box<Expr>,
-    rhs: Box<Expr>,
-}
-
-impl Display for Div {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        binary_op_fmt(self, f)
-    }
-}
-
-impl BinaryOp for &Div {
-    fn rhs(&self) -> &Expr {
-        self.rhs.deref()
-    }
-
-    fn lhs(&self) -> &Expr {
-        self.lhs.deref()
-    }
-
-    fn op(&self) -> &str {
-        "/"
-    }
-}
-
 impl std::ops::Div for Expr {
     type Output = Expr;
 
     fn div(self, rhs: Self) -> Self::Output {
-        Expr::MathOp(MathOp::Div(Div {
-            lhs: Box::new(self),
-            rhs: Box::new(rhs),
-        }))
+        Expr::new_mul(self, Expr::new_pow(rhs, Expr::Integer(-1)))
     }
 }
 
@@ -312,8 +281,8 @@ mod tests {
 
     #[test]
     fn div_display() {
-        let result = Integer(1) / Symbol("x".into());
-        assert_eq!(result.to_string(), "(1/x)")
+        let result = Integer(5) / Symbol("x".into());
+        assert_eq!(result.to_string(), "(5*(x^-1))")
     }
 
     #[test]
