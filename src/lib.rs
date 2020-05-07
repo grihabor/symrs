@@ -29,6 +29,13 @@ impl Expr {
             lhs: Box::new(lhs),
         }))
     }
+
+    fn new_mul(lhs: Expr, rhs: Expr) -> Expr {
+        Expr::MathOp(MathOp::Mul(Mul {
+            rhs: Box::new(rhs),
+            lhs: Box::new(lhs),
+        }))
+    }
 }
 
 #[derive(Debug)]
@@ -148,10 +155,7 @@ impl std::ops::Mul for Expr {
     type Output = Expr;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        Expr::MathOp(MathOp::Mul(Mul {
-            lhs: Box::new(self),
-            rhs: Box::new(rhs),
-        }))
+        Expr::new_mul(self, rhs)
     }
 }
 
