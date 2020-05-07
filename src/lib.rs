@@ -9,6 +9,14 @@ enum Expr {
     MathOp(MathOp),
 }
 
+impl Expr {
+    fn new_neg(operand: Expr) -> Expr {
+        Expr::MathOp(MathOp::Neg(Neg {
+            operand: Box::new(operand),
+        }))
+    }
+}
+
 #[derive(Debug)]
 struct Symbol {
     name: String,
@@ -42,11 +50,11 @@ impl Display for Add {
 
 impl BinaryOp for &Add {
     fn rhs(&self) -> &Expr {
-        return self.rhs.deref();
+        self.rhs.deref()
     }
 
     fn lhs(&self) -> &Expr {
-        return self.lhs.deref();
+        self.lhs.deref()
     }
 
     fn op(&self) -> &str {
@@ -66,32 +74,6 @@ fn binary_op_fmt<T: BinaryOp>(op: T, f: &mut Formatter<'_>) -> std::fmt::Result 
         .and(f.write_str(op.op()))
         .and(<Expr as Display>::fmt(op.rhs(), f))
         .and(f.write_char(')'))
-}
-
-#[derive(Debug)]
-struct Sub {
-    rhs: Box<Expr>,
-    lhs: Box<Expr>,
-}
-
-impl BinaryOp for &Sub {
-    fn rhs(&self) -> &Expr {
-        return self.rhs.deref();
-    }
-
-    fn lhs(&self) -> &Expr {
-        return self.lhs.deref();
-    }
-
-    fn op(&self) -> &str {
-        "-"
-    }
-}
-
-impl Display for Sub {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        binary_op_fmt(self, f)
-    }
 }
 
 #[derive(Debug)]
@@ -123,19 +105,32 @@ impl Display for Mul {
 #[derive(Debug)]
 enum MathOp {
     Add(Add),
-    Sub(Sub),
+    Neg(Neg),
     Mul(Mul),
     Div(Div),
+}
+
+#[derive(Debug)]
+struct Neg {
+    operand: Box<Expr>,
+}
+
+impl Display for Neg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str("(-")
+            .and(<Expr as Display>::fmt(&self.operand, f))
+            .and(f.write_char(')'))
+    }
 }
 
 impl std::ops::Mul for Expr {
     type Output = Expr;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        return Expr::MathOp(MathOp::Mul(Mul {
+        Expr::MathOp(MathOp::Mul(Mul {
             lhs: Box::new(self),
             rhs: Box::new(rhs),
-        }));
+        }))
     }
 }
 
@@ -143,7 +138,7 @@ impl Display for MathOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             MathOp::Add(add) => <Add as Display>::fmt(add, f),
-            MathOp::Sub(sub) => <Sub as Display>::fmt(sub, f),
+            MathOp::Neg(neg) => <Neg as Display>::fmt(neg, f),
             MathOp::Mul(mul) => <Mul as Display>::fmt(mul, f),
             MathOp::Div(div) => <Div as Display>::fmt(div, f),
         }
@@ -154,10 +149,10 @@ impl std::ops::Add for Expr {
     type Output = Expr;
 
     fn add(self, rhs: Self) -> Self::Output {
-        return Expr::MathOp(MathOp::Add(Add {
+        Expr::MathOp(MathOp::Add(Add {
             lhs: Box::new(self),
             rhs: Box::new(rhs),
-        }));
+        }))
     }
 }
 
@@ -165,10 +160,10 @@ impl std::ops::Sub for Expr {
     type Output = Expr;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        return Expr::MathOp(MathOp::Sub(Sub {
+        Expr::MathOp(MathOp::Add(Add {
             lhs: Box::new(self),
-            rhs: Box::new(rhs),
-        }));
+            rhs: Box::new(Expr::new_neg(rhs)),
+        }))
     }
 }
 
@@ -204,7 +199,7 @@ impl BinaryOp for &Div {
     }
 
     fn op(&self) -> &str {
-        return "/";
+        "/"
     }
 }
 
@@ -249,18 +244,9 @@ mod tests {
     }
 
     #[test]
-    fn sub_symbols() {
-        let result = Symbol("x".into()) - Integer(1);
-        assert!(match result {
-            Expr::MathOp(MathOp::Sub(_)) => true,
-            _ => false,
-        })
-    }
-
-    #[test]
     fn sub_display() {
         let result = Symbol("x".into()) - Integer(1);
-        assert_eq!(result.to_string(), "(x-1)")
+        assert_eq!(result.to_string(), "(x+(-1))")
     }
 
     #[test]
