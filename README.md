@@ -12,3 +12,6 @@ https://github.com/Geal/nom
 
 Use term rewriting for expression simplification:  
 https://crates.io/crates/term_rewriting
+
+Polynomials:  
+https://crates.io/crates/polynomial
