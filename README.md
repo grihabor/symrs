@@ -1,6 +1,6 @@
 # symrs
 
-Inspired by [sympy]()
+Inspired by [sympy](https://github.com/sympy/sympy)
 
 # TODO
 
