@@ -2,7 +2,7 @@
 
 Inspired by [sympy](https://github.com/sympy/sympy)
 
-# TODO
+## TODO
 
 Use numeric types:  
 https://github.com/rust-num/num
@@ -16,5 +16,10 @@ https://crates.io/crates/term_rewriting
 Polynomials:  
 https://crates.io/crates/polynomial
 
-Rational Exponential Expressions:
+## Papers
+
+Brown's algorithm:
 https://www.tandfonline.com/doi/pdf/10.1080/00029890.1969.12000122
+
+RADCAN (Fateman's) algorithm:
+https://people.eecs.berkeley.edu/~fateman/papers/radcan.pdf
