@@ -22,6 +22,13 @@ impl Expr {
             lhs: Box::new(lhs),
         }))
     }
+
+    fn new_add(lhs: Expr, rhs: Expr) -> Expr {
+        Expr::MathOp(MathOp::Add(Add {
+            rhs: Box::new(rhs),
+            lhs: Box::new(lhs),
+        }))
+    }
 }
 
 #[derive(Debug)]
@@ -184,10 +191,7 @@ impl std::ops::Add for Expr {
     type Output = Expr;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Expr::MathOp(MathOp::Add(Add {
-            lhs: Box::new(self),
-            rhs: Box::new(rhs),
-        }))
+        Expr::new_add(self, rhs)
     }
 }
 
@@ -195,10 +199,7 @@ impl std::ops::Sub for Expr {
     type Output = Expr;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Expr::MathOp(MathOp::Add(Add {
-            lhs: Box::new(self),
-            rhs: Box::new(Expr::new_neg(rhs)),
-        }))
+        Expr::new_add(self, Expr::new_neg(rhs))
     }
 }
 
