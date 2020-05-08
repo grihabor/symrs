@@ -1,8 +1,10 @@
+mod simplify;
+
 use num::Integer;
 use std::fmt::{Binary, Debug, Display, Formatter, Pointer, Write};
 use std::ops::Deref;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Expr {
     Symbol(Symbol),
     Integer(i64),
@@ -30,15 +32,26 @@ impl Expr {
         }))
     }
 
+    fn new_add_ref(lhs: Expr, rhs: Expr) -> Expr {
+        Expr::MathOp(MathOp::Add(Add {
+            rhs: Box::new(rhs),
+            lhs: Box::new(lhs),
+        }))
+    }
+
     fn new_mul(lhs: Expr, rhs: Expr) -> Expr {
         Expr::MathOp(MathOp::Mul(Mul {
             rhs: Box::new(rhs),
             lhs: Box::new(lhs),
         }))
     }
+
+    fn new_mul_clone(lhs: &Expr, rhs: &Expr) -> Expr {
+        Expr::new_mul(lhs.clone(), rhs.clone())
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Symbol {
     name: String,
 }
@@ -57,7 +70,7 @@ impl From<&str> for Symbol {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Add {
     rhs: Box<Expr>,
     lhs: Box<Expr>,
@@ -97,7 +110,7 @@ fn binary_op_fmt<T: BinaryOp>(op: T, f: &mut Formatter<'_>) -> std::fmt::Result 
         .and(f.write_char(')'))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Mul {
     rhs: Box<Expr>,
     lhs: Box<Expr>,
@@ -123,7 +136,7 @@ impl Display for Mul {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum MathOp {
     Add(Add),
     Neg(Neg),
@@ -131,13 +144,13 @@ enum MathOp {
     Pow(Pow),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Pow {
     rhs: Box<Expr>,
     lhs: Box<Expr>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Neg {
     operand: Box<Expr>,
 }
