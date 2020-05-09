@@ -23,6 +23,14 @@ fn simplify(expr: Expr) -> Expr {
                     simplify(Expr::new_add(rhs, lhs))
                 }
 
+                (Expr::MathOp(MathOp::Add(left_add)), rhs) => {
+                    // change add order: ((a + b) + c) => (a + (b + c))
+                    simplify(Expr::new_add(
+                        *left_add.lhs,
+                        Expr::new_add(*left_add.rhs, rhs),
+                    ))
+                }
+
                 // create the same add expression again to avoid borrow problems with expr
                 (lhs, rhs) => Expr::new_add(lhs, rhs),
             }
@@ -35,10 +43,10 @@ fn simplify(expr: Expr) -> Expr {
                 (Expr::Integer(l), Expr::Integer(r)) => Expr::Integer(l * r),
 
                 (Expr::MathOp(MathOp::Add(add)), mul_arg)
-                | (mul_arg, Expr::MathOp(MathOp::Add(add))) => Expr::new_add(
+                | (mul_arg, Expr::MathOp(MathOp::Add(add))) => simplify(Expr::new_add(
                     simplify(Expr::new_mul_clone(add.lhs.deref(), &mul_arg)),
                     simplify(Expr::new_mul_clone(add.rhs.deref(), &mul_arg)),
-                ),
+                )),
 
                 // this match arm must be in the end because we must try
                 // to simplify the expression first and only if we fail
@@ -72,6 +80,6 @@ mod test {
         assert_eq!(expr.to_string(), "((2+y)*(x+3))");
 
         let expr = simplify(expr);
-        assert_eq!(expr.to_string(), "(((2*x)+6)+((x*y)+(3*y)))");
+        assert_eq!(expr.to_string(), "((2*x)+(6+((x*y)+(3*y))))");
     }
 }
