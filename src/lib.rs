@@ -27,22 +27,13 @@ impl Expr {
 
     fn new_add(lhs: Expr, rhs: Expr) -> Expr {
         Expr::MathOp(MathOp::Add(Add {
-            rhs: Box::new(rhs),
-            lhs: Box::new(lhs),
-        }))
-    }
-
-    fn new_add_ref(lhs: Expr, rhs: Expr) -> Expr {
-        Expr::MathOp(MathOp::Add(Add {
-            rhs: Box::new(rhs),
-            lhs: Box::new(lhs),
+            args: vec![Box::new(lhs), Box::new(rhs)],
         }))
     }
 
     fn new_mul(lhs: Expr, rhs: Expr) -> Expr {
         Expr::MathOp(MathOp::Mul(Mul {
-            rhs: Box::new(rhs),
-            lhs: Box::new(lhs),
+            args: vec![Box::new(rhs), Box::new(lhs)],
         }))
     }
 
@@ -72,8 +63,7 @@ impl From<&str> for Symbol {
 
 #[derive(Debug, Clone)]
 struct Add {
-    rhs: Box<Expr>,
-    lhs: Box<Expr>,
+    args: Vec<Box<Expr>>,
 }
 
 impl Display for Add {
@@ -82,13 +72,9 @@ impl Display for Add {
     }
 }
 
-impl BinaryOp for &Add {
-    fn rhs(&self) -> &Expr {
-        self.rhs.deref()
-    }
-
-    fn lhs(&self) -> &Expr {
-        self.lhs.deref()
+impl VarargOp for &Add {
+    fn args(&self) -> &Vec<Box<Expr>> {
+        &self.args
     }
 
     fn op(&self) -> &str {
@@ -96,33 +82,38 @@ impl BinaryOp for &Add {
     }
 }
 
-trait BinaryOp {
-    fn rhs(&self) -> &Expr;
-    fn lhs(&self) -> &Expr;
+trait VarargOp {
+    fn args(&self) -> &Vec<Box<Expr>>;
     fn op(&self) -> &str;
 }
 
-fn binary_op_fmt<T: BinaryOp>(op: T, f: &mut Formatter<'_>) -> std::fmt::Result {
-    f.write_char('(')
-        .and(<Expr as Display>::fmt(op.lhs(), f))
-        .and(f.write_str(op.op()))
-        .and(<Expr as Display>::fmt(op.rhs(), f))
-        .and(f.write_char(')'))
+fn binary_op_fmt<T: VarargOp>(op: T, f: &mut Formatter<'_>) -> std::fmt::Result {
+    let mut r = f.write_char('(');
+    let mut it = op.args().into_iter();
+
+    // we need to handle
+    r = r.and(
+        it.next()
+            .ok_or(std::fmt::Error)
+            .map(|arg| <Expr as Display>::fmt(arg, f)),
+    );
+
+    for arg in it {
+        r = r
+            .and(f.write_str(op.op()))
+            .and(<Expr as Display>::fmt(op.lhs(), f))
+    }
+    r.and(f.write_char(')'))
 }
 
 #[derive(Debug, Clone)]
 struct Mul {
-    rhs: Box<Expr>,
-    lhs: Box<Expr>,
+    args: Vec<Box<Expr>>,
 }
 
-impl BinaryOp for &Mul {
-    fn rhs(&self) -> &Expr {
-        self.rhs.deref()
-    }
-
-    fn lhs(&self) -> &Expr {
-        self.lhs.deref()
+impl VarargOp for &Mul {
+    fn args(&self) -> &Vec<Box<Expr>> {
+        &self.args
     }
 
     fn op(&self) -> &str {
@@ -171,13 +162,9 @@ impl std::ops::Mul for Expr {
     }
 }
 
-impl BinaryOp for &Pow {
-    fn rhs(&self) -> &Expr {
-        self.rhs.deref()
-    }
-
-    fn lhs(&self) -> &Expr {
-        self.lhs.deref()
+impl VarargOp for &Pow {
+    fn args(&self) -> &Vec<Box<Expr>> {
+        &vec![self.lhs, self.rhs]
     }
 
     fn op(&self) -> &str {

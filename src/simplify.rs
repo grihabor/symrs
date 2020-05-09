@@ -63,6 +63,21 @@ fn expand(expr: Expr) -> Expr {
     }
 }
 
+// https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/mul.py#L859
+// Handle things like 1/(x*(x + 1)), which are automatically converted
+// to 1/x*1/(x + 1)
+fn expand_mul(expr: Expr) -> Expr {
+    match expr {
+        Expr::MathOp(MathOp::Mul(mul)) => {
+            for arg in mul.args {
+
+            }
+        }
+
+        _ => expr
+    }
+}
+
 mod test {
     use crate::simplify::expand;
     use crate::{Expr, Symbol};
