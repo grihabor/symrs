@@ -49,6 +49,7 @@ fn simplify(expr: Expr) -> Expr {
                     simplify(Expr::new_mul(rhs, lhs))
                 }
 
+                // default case:
                 // create the same mul expression again to avoid borrow problems with expr
                 (lhs, rhs) => Expr::new_mul(lhs, rhs),
             }
