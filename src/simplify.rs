@@ -6,12 +6,8 @@ use std::collections::VecDeque;
 use std::ops::Deref;
 use std::process::exit;
 
-enum Simplify {
-    Done,
-    Again,
-}
-
-fn simplify(expr: Expr) -> Expr {
+// https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/function.py#L2451
+fn expand(expr: Expr) -> Expr {
     match expr {
         Expr::MathOp(MathOp::Add(add)) => {
             match (*add.lhs, *add.rhs) {
@@ -20,12 +16,12 @@ fn simplify(expr: Expr) -> Expr {
 
                 (lhs @ Expr::Symbol(_), rhs @ Expr::Integer(_)) => {
                     // swap operands
-                    simplify(Expr::new_add(rhs, lhs))
+                    expand(Expr::new_add(rhs, lhs))
                 }
 
                 (Expr::MathOp(MathOp::Add(left_add)), rhs) => {
                     // change add order: ((a + b) + c) => (a + (b + c))
-                    simplify(Expr::new_add(
+                    expand(Expr::new_add(
                         *left_add.lhs,
                         Expr::new_add(*left_add.rhs, rhs),
                     ))
@@ -43,18 +39,18 @@ fn simplify(expr: Expr) -> Expr {
                 (Expr::Integer(l), Expr::Integer(r)) => Expr::Integer(l * r),
 
                 (Expr::MathOp(MathOp::Add(add)), mul_arg)
-                | (mul_arg, Expr::MathOp(MathOp::Add(add))) => simplify(Expr::new_add(
-                    simplify(Expr::new_mul_clone(add.lhs.deref(), &mul_arg)),
-                    simplify(Expr::new_mul_clone(add.rhs.deref(), &mul_arg)),
+                | (mul_arg, Expr::MathOp(MathOp::Add(add))) => expand(Expr::new_add(
+                    expand(Expr::new_mul_clone(add.lhs.deref(), &mul_arg)),
+                    expand(Expr::new_mul_clone(add.rhs.deref(), &mul_arg)),
                 )),
 
                 // this match arm must be in the end because we must try
-                // to simplify the expression first and only if we fail
+                // to expand the expression first and only if we fail
                 // we need to swap operands and try again.
                 (lhs @ Expr::Symbol(_), rhs @ Expr::Integer(_))
                 | (lhs @ Expr::Symbol(_), rhs @ Expr::MathOp(MathOp::Add(_))) => {
                     // swap operands
-                    simplify(Expr::new_mul(rhs, lhs))
+                    expand(Expr::new_mul(rhs, lhs))
                 }
 
                 // default case:
@@ -68,18 +64,18 @@ fn simplify(expr: Expr) -> Expr {
 }
 
 mod test {
-    use crate::simplify::simplify;
+    use crate::simplify::expand;
     use crate::{Expr, Symbol};
 
     #[test]
-    fn test_simplify() {
+    fn test_expand() {
         let expr = Expr::new_mul(
             Expr::new_add(Expr::Integer(2), Expr::Symbol("y".into())),
             Expr::new_add(Expr::Symbol("x".into()), Expr::Integer(3)),
         );
         assert_eq!(expr.to_string(), "((2+y)*(x+3))");
 
-        let expr = simplify(expr);
+        let expr = expand(expr);
         assert_eq!(expr.to_string(), "((2*x)+(6+((x*y)+(3*y))))");
     }
 }
