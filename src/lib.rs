@@ -8,42 +8,36 @@ use std::ops::Deref;
 enum Expr {
     Symbol(Symbol),
     Integer(i64),
-    MathOp(MathOp),
+    Add(Add),
+    Neg(Neg),
+    Mul(Mul),
+    Pow(Pow),
 }
 
 impl Expr {
     fn new_neg(operand: Expr) -> Expr {
-        Expr::MathOp(MathOp::Neg(Neg {
-            operand: Box::new(operand),
-        }))
+        Expr::Neg(Neg {
+            arg: Box::new(operand),
+        })
     }
 
     fn new_pow(lhs: Expr, rhs: Expr) -> Expr {
-        Expr::MathOp(MathOp::Pow(Pow {
+        Expr::Pow(Pow {
             rhs: Box::new(rhs),
             lhs: Box::new(lhs),
-        }))
+        })
     }
 
     fn new_add(lhs: Expr, rhs: Expr) -> Expr {
-        Expr::MathOp(MathOp::Add(Add {
-            rhs: Box::new(rhs),
-            lhs: Box::new(lhs),
-        }))
-    }
-
-    fn new_add_ref(lhs: Expr, rhs: Expr) -> Expr {
-        Expr::MathOp(MathOp::Add(Add {
-            rhs: Box::new(rhs),
-            lhs: Box::new(lhs),
-        }))
+        Expr::Add(Add {
+            args: vec![Box::new(lhs), Box::new(rhs)],
+        })
     }
 
     fn new_mul(lhs: Expr, rhs: Expr) -> Expr {
-        Expr::MathOp(MathOp::Mul(Mul {
-            rhs: Box::new(rhs),
-            lhs: Box::new(lhs),
-        }))
+        Expr::Mul(Mul {
+            args: vec![Box::new(lhs), Box::new(rhs)],
+        })
     }
 
     fn new_mul_clone(lhs: &Expr, rhs: &Expr) -> Expr {
@@ -72,23 +66,18 @@ impl From<&str> for Symbol {
 
 #[derive(Debug, Clone)]
 struct Add {
-    rhs: Box<Expr>,
-    lhs: Box<Expr>,
+    args: Vec<Box<Expr>>,
 }
 
 impl Display for Add {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        binary_op_fmt(self, f)
+        binary_op_fmt(&self, f)
     }
 }
 
-impl BinaryOp for &Add {
-    fn rhs(&self) -> &Expr {
-        self.rhs.deref()
-    }
-
-    fn lhs(&self) -> &Expr {
-        self.lhs.deref()
+impl VarargOp for &Add {
+    fn args(&self) -> Vec<&Expr> {
+        (&self.args).into_iter().map(|a| a.deref()).collect()
     }
 
     fn op(&self) -> &str {
@@ -96,33 +85,39 @@ impl BinaryOp for &Add {
     }
 }
 
-trait BinaryOp {
-    fn rhs(&self) -> &Expr;
-    fn lhs(&self) -> &Expr;
+trait VarargOp {
+    fn args(&self) -> Vec<&Expr>;
     fn op(&self) -> &str;
 }
 
-fn binary_op_fmt<T: BinaryOp>(op: T, f: &mut Formatter<'_>) -> std::fmt::Result {
-    f.write_char('(')
-        .and(<Expr as Display>::fmt(op.lhs(), f))
-        .and(f.write_str(op.op()))
-        .and(<Expr as Display>::fmt(op.rhs(), f))
-        .and(f.write_char(')'))
+fn binary_op_fmt(op: &dyn VarargOp, f: &mut Formatter) -> std::fmt::Result {
+    let mut r = f.write_char('(');
+    let mut it = op.args().into_iter();
+
+    // we need to handle first argument separately
+    // to render op symbol correctly
+    r = r.and(
+        it.next()
+            .ok_or(std::fmt::Error)
+            .and_then(|arg| <Expr as Display>::fmt(arg, f)),
+    );
+
+    for arg in it {
+        r = r
+            .and(f.write_str(op.op()))
+            .and(<Expr as Display>::fmt(arg, f))
+    }
+    r.and(f.write_char(')'))
 }
 
 #[derive(Debug, Clone)]
 struct Mul {
-    rhs: Box<Expr>,
-    lhs: Box<Expr>,
+    args: Vec<Box<Expr>>,
 }
 
-impl BinaryOp for &Mul {
-    fn rhs(&self) -> &Expr {
-        self.rhs.deref()
-    }
-
-    fn lhs(&self) -> &Expr {
-        self.lhs.deref()
+impl VarargOp for &Mul {
+    fn args(&self) -> Vec<&Expr> {
+        (&self.args).into_iter().map(|a| a.deref()).collect()
     }
 
     fn op(&self) -> &str {
@@ -132,16 +127,8 @@ impl BinaryOp for &Mul {
 
 impl Display for Mul {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        binary_op_fmt(self, f)
+        binary_op_fmt(&self, f)
     }
-}
-
-#[derive(Debug, Clone)]
-enum MathOp {
-    Add(Add),
-    Neg(Neg),
-    Mul(Mul),
-    Pow(Pow),
 }
 
 #[derive(Debug, Clone)]
@@ -152,13 +139,13 @@ struct Pow {
 
 #[derive(Debug, Clone)]
 struct Neg {
-    operand: Box<Expr>,
+    arg: Box<Expr>,
 }
 
 impl Display for Neg {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str("(-")
-            .and(<Expr as Display>::fmt(&self.operand, f))
+            .and(<Expr as Display>::fmt(&self.arg, f))
             .and(f.write_char(')'))
     }
 }
@@ -171,13 +158,12 @@ impl std::ops::Mul for Expr {
     }
 }
 
-impl BinaryOp for &Pow {
-    fn rhs(&self) -> &Expr {
-        self.rhs.deref()
-    }
-
-    fn lhs(&self) -> &Expr {
-        self.lhs.deref()
+impl VarargOp for &Pow {
+    fn args(&self) -> Vec<&Expr> {
+        let mut v = Vec::new();
+        v.push(self.lhs.deref());
+        v.push(self.rhs.deref());
+        v
     }
 
     fn op(&self) -> &str {
@@ -187,18 +173,7 @@ impl BinaryOp for &Pow {
 
 impl Display for Pow {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        binary_op_fmt(self, f)
-    }
-}
-
-impl Display for MathOp {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MathOp::Add(add) => <Add as Display>::fmt(add, f),
-            MathOp::Neg(neg) => <Neg as Display>::fmt(neg, f),
-            MathOp::Mul(mul) => <Mul as Display>::fmt(mul, f),
-            MathOp::Pow(pow) => <Pow as Display>::fmt(pow, f),
-        }
+        binary_op_fmt(&self, f)
     }
 }
 
@@ -223,7 +198,10 @@ impl Display for Expr {
         match self {
             Expr::Integer(i) => <i64 as Display>::fmt(i, f),
             Expr::Symbol(s) => <Symbol as Display>::fmt(s, f),
-            Expr::MathOp(op) => <MathOp as Display>::fmt(op, f),
+            Expr::Add(add) => <Add as Display>::fmt(add, f),
+            Expr::Neg(neg) => <Neg as Display>::fmt(neg, f),
+            Expr::Mul(mul) => <Mul as Display>::fmt(mul, f),
+            Expr::Pow(pow) => <Pow as Display>::fmt(pow, f),
         }
     }
 }
@@ -248,7 +226,6 @@ impl num::traits::pow::Pow<Expr> for Expr {
 mod tests {
     use crate::Expr;
     use crate::Expr::{Integer, Symbol};
-    use crate::MathOp;
     use num::traits::pow::Pow;
 
     #[test]
@@ -260,7 +237,7 @@ mod tests {
     fn add_integers() {
         let result = Integer(1) + Integer(1);
         assert!(match result {
-            Expr::MathOp(_) => true,
+            Expr::Add(_) => true,
             _ => false,
         })
     }
@@ -269,7 +246,7 @@ mod tests {
     fn add_symbols() {
         let result = Symbol("x".into()) + Symbol("x".into());
         assert!(match result {
-            Expr::MathOp(MathOp::Add(_)) => true,
+            Expr::Add(_) => true,
             _ => false,
         })
     }
