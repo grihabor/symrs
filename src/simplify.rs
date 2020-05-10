@@ -1,5 +1,3 @@
-extern crate itertools;
-
 use crate::Add;
 use crate::Mul;
 use crate::{Expr, Symbol};
