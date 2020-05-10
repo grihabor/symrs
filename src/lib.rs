@@ -102,6 +102,10 @@ fn binary_op_fmt(op: &dyn VarargOp, f: &mut Formatter) -> std::fmt::Result {
             .and_then(|arg| <Expr as Display>::fmt(arg, f)),
     );
 
+    if let Err(_) = r {
+        return f.write_char(')');
+    }
+
     for arg in it {
         r = r
             .and(f.write_str(op.op()))
