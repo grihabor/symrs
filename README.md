@@ -31,6 +31,9 @@ https://www.ams.org/journals/mcom/1970-24-111/S0025-5718-1970-0276200-X/S0025-57
 
 ## Related projects
 
+Abstract algebra for Rust:
+https://docs.rs/crate/alga/0.9.3
+
 Linear algebra library for Rust:  
 https://github.com/rustsim/nalgebra
 
