@@ -63,16 +63,15 @@ use std::process::exit;
 // }
 
 // https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/mul.py#L859
-// Handle things like 1/(x*(x + 1)), which are automatically converted
-// to 1/x*1/(x + 1)
+//
 fn expand_exp_mul(expr: Expr) -> Expr {
     if let Expr::Pow(pow) = expr {
         match (*pow.lhs, *pow.rhs) {
-            (Expr::Mul(inner_mul), Expr::Neg(neg)) => {
+            (Expr::Mul(inner_mul), rhs) => {
                 let args = inner_mul
                     .args
                     .into_iter()
-                    .map(|inner_arg| Box::new(Expr::new_pow(*inner_arg, Expr::Neg(neg.clone()))))
+                    .map(|inner_arg| Box::new(Expr::new_pow(*inner_arg, rhs.clone())))
                     .collect();
                 Expr::Mul(Mul { args })
             }
@@ -221,6 +220,21 @@ mod test {
 
         let expr = expand_exp_mul(expr);
         assert_eq!(expr.to_string(), "((x^(-y))*((x+1)^(-y)))");
+    }
+
+    #[test]
+    fn test_expand_exp_mul_2() {
+        let expr = Expr::new_pow(
+            Expr::new_mul(
+                Expr::Symbol("x".into()),
+                Expr::new_add(Expr::Symbol("x".into()), Expr::Integer(1)),
+            ),
+            Expr::Integer(2),
+        );
+        assert_eq!(expr.to_string(), "((x*(x+1))^2)");
+
+        let expr = expand_exp_mul(expr);
+        assert_eq!(expr.to_string(), "((x^2)*((x+1)^2))");
     }
 
     #[test]
