@@ -82,9 +82,10 @@ fn expand_exp_mul(expr: Expr) -> Expr {
     }
 }
 
-fn cross_product<X, Z>(xvec: &Vec<Box<X>>, yvec: &Vec<Box<X>>) -> Vec<Box<Z>>
+fn cross_product<X, Y, Z>(xvec: &Vec<Y>, yvec: &Vec<Y>) -> Vec<Box<Z>>
 where
     X: Clone + std::ops::Mul<X, Output = Z>,
+    Y: Deref<Target = X>,
     Z: Clone,
 {
     let mut result: Vec<Box<Z>> = Vec::with_capacity(xvec.len() * yvec.len());
