@@ -11,39 +11,117 @@ enum Expr {
     Add(Add),
     Neg(Neg),
     Mul(Mul),
-    Pow(Pow),
+    Exp(Exp),
+    Ln(Ln),
+}
+
+#[derive(Debug, Clone)]
+struct Exp {
+    arg: ExprPtr,
+}
+
+#[derive(Debug, Clone)]
+struct Ln {
+    arg: ExprPtr,
+}
+
+impl Display for Ln {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        fmt_func(f, "ln", &self.arg)
+    }
+}
+
+impl Display for Exp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Expr::Mul(mul) = self.arg.deref() {
+            let mut args = vec![];
+            let mut first_ln = None;
+            for arg in &mul.args {
+                if let (None, Expr::Ln(ln)) = (&first_ln, arg.deref()) {
+                    first_ln = Some(ln)
+                } else {
+                    args.push(arg.clone())
+                }
+            }
+            if let Some(ln) = first_ln {
+                let rhs = if args.len() == 1 {
+                    args.remove(0)
+                } else {
+                    Expr::new(Expr::Mul(Mul { args }))
+                };
+                let pow = Pow {
+                    lhs: ln.arg.clone(),
+                    rhs: rhs,
+                };
+                return fmt_binary_op(&pow, f);
+            }
+        }
+        fmt_func(f, "exp", &self.arg)
+    }
+}
+
+struct Pow {
+    lhs: ExprPtr,
+    rhs: ExprPtr,
+}
+
+impl VarargOp for Pow {
+    fn args(&self) -> Vec<&Expr> {
+        vec![self.lhs.deref(), self.rhs.deref()]
+    }
+
+    fn op(&self) -> &str {
+        "^"
+    }
+}
+
+fn fmt_func(f: &mut Formatter<'_>, name: &str, arg: &ExprPtr) -> std::fmt::Result {
+    f.write_str(name)
+        .and(f.write_char('('))
+        .and(<ExprPtr as Display>::fmt(arg, f))
+        .and(f.write_char(')'))
 }
 
 type ExprPtr = Box<Expr>;
 
 impl Expr {
+    fn new(t: Expr) -> ExprPtr {
+        return Box::new(t);
+    }
+
     fn new_neg(operand: Expr) -> Expr {
         Expr::Neg(Neg {
-            arg: Box::new(operand),
+            arg: Expr::new(operand),
         })
     }
 
     fn new_pow(lhs: Expr, rhs: Expr) -> Expr {
-        Expr::Pow(Pow {
-            rhs: Box::new(rhs),
-            lhs: Box::new(lhs),
+        Expr::Exp(Exp {
+            arg: Expr::new(Expr::new_mul(
+                rhs,
+                Expr::Ln(Ln {
+                    arg: Expr::new(lhs),
+                }),
+            )),
         })
     }
 
     fn new_add(lhs: Expr, rhs: Expr) -> Expr {
         Expr::Add(Add {
-            args: vec![Box::new(lhs), Box::new(rhs)],
+            args: vec![Expr::new(lhs), Expr::new(rhs)],
         })
     }
 
     fn new_mul(lhs: Expr, rhs: Expr) -> Expr {
         Expr::Mul(Mul {
-            args: vec![Box::new(lhs), Box::new(rhs)],
+            args: vec![Expr::new(lhs), Expr::new(rhs)],
         })
     }
 
-    fn new_mul_clone(lhs: &Expr, rhs: &Expr) -> Expr {
-        Expr::new_mul(lhs.clone(), rhs.clone())
+    fn new_exp(arg: Expr) -> Expr {
+        Expr::Exp(Exp {
+            arg: Expr::new(arg),
+        })
     }
 }
 
@@ -73,7 +151,7 @@ struct Add {
 
 impl Display for Add {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        binary_op_fmt(&self, f)
+        fmt_binary_op(&self, f)
     }
 }
 
@@ -92,7 +170,7 @@ trait VarargOp {
     fn op(&self) -> &str;
 }
 
-fn binary_op_fmt(op: &dyn VarargOp, f: &mut Formatter) -> std::fmt::Result {
+fn fmt_binary_op(op: &dyn VarargOp, f: &mut Formatter) -> std::fmt::Result {
     let mut r = f.write_char('(');
     let mut it = op.args().into_iter();
 
@@ -133,14 +211,8 @@ impl VarargOp for &Mul {
 
 impl Display for Mul {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        binary_op_fmt(&self, f)
+        fmt_binary_op(&self, f)
     }
-}
-
-#[derive(Debug, Clone)]
-struct Pow {
-    rhs: ExprPtr,
-    lhs: ExprPtr,
 }
 
 #[derive(Debug, Clone)]
@@ -161,25 +233,6 @@ impl std::ops::Mul for Expr {
 
     fn mul(self, rhs: Self) -> Self::Output {
         Expr::new_mul(self, rhs)
-    }
-}
-
-impl VarargOp for &Pow {
-    fn args(&self) -> Vec<&Expr> {
-        let mut v = Vec::new();
-        v.push(self.lhs.deref());
-        v.push(self.rhs.deref());
-        v
-    }
-
-    fn op(&self) -> &str {
-        "^"
-    }
-}
-
-impl Display for Pow {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        binary_op_fmt(&self, f)
     }
 }
 
@@ -207,7 +260,8 @@ impl Display for Expr {
             Expr::Add(add) => <Add as Display>::fmt(add, f),
             Expr::Neg(neg) => <Neg as Display>::fmt(neg, f),
             Expr::Mul(mul) => <Mul as Display>::fmt(mul, f),
-            Expr::Pow(pow) => <Pow as Display>::fmt(pow, f),
+            Expr::Exp(exp) => <Exp as Display>::fmt(exp, f),
+            Expr::Ln(ln) => <Ln as Display>::fmt(ln, f),
         }
     }
 }
