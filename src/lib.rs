@@ -14,6 +14,8 @@ enum Expr {
     Pow(Pow),
 }
 
+type ExprPtr = Box<Expr>;
+
 impl Expr {
     fn new_neg(operand: Expr) -> Expr {
         Expr::Neg(Neg {
@@ -66,7 +68,7 @@ impl From<&str> for Symbol {
 
 #[derive(Debug, Clone)]
 struct Add {
-    args: Vec<Box<Expr>>,
+    args: Vec<ExprPtr>,
 }
 
 impl Display for Add {
@@ -116,7 +118,7 @@ fn binary_op_fmt(op: &dyn VarargOp, f: &mut Formatter) -> std::fmt::Result {
 
 #[derive(Debug, Clone)]
 struct Mul {
-    args: Vec<Box<Expr>>,
+    args: Vec<ExprPtr>,
 }
 
 impl VarargOp for &Mul {
@@ -137,13 +139,13 @@ impl Display for Mul {
 
 #[derive(Debug, Clone)]
 struct Pow {
-    rhs: Box<Expr>,
-    lhs: Box<Expr>,
+    rhs: ExprPtr,
+    lhs: ExprPtr,
 }
 
 #[derive(Debug, Clone)]
 struct Neg {
-    arg: Box<Expr>,
+    arg: ExprPtr,
 }
 
 impl Display for Neg {
