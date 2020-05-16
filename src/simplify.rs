@@ -63,19 +63,19 @@ use std::process::exit;
 // }
 
 // https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/mul.py#L859
-//
+// exp(x + y) => exp(x) * exp(y)
 fn expand_exp_mul(expr: Expr) -> Expr {
-    if let Expr::Pow(pow) = expr {
-        match (*pow.lhs, *pow.rhs) {
-            (Expr::Mul(inner_mul), rhs) => {
-                let args = inner_mul
+    if let Expr::Exp(exp) = expr {
+        match *exp.arg {
+            Expr::Add(inner_add) => {
+                let args = inner_add
                     .args
                     .into_iter()
-                    .map(|inner_arg| Box::new(Expr::new_pow(*inner_arg, rhs.clone())))
+                    .map(|inner_arg| Expr::new(Expr::new_exp(*inner_arg)))
                     .collect();
                 Expr::Mul(Mul { args })
             }
-            (lhs, rhs) => Expr::new_pow(lhs, rhs),
+            (arg) => Expr::new_exp(arg),
         }
     } else {
         expr
@@ -109,7 +109,7 @@ fn expand_mul_add(expr: Expr) -> Expr {
             for arg in mul.args {
                 match *arg {
                     Expr::Add(add) => sum_args.push(add),
-                    arg => other_args.push(Box::new(arg)),
+                    arg => other_args.push(Expr::new(arg)),
                 }
             }
             (sum_args, other_args)
@@ -159,7 +159,7 @@ fn expand_mul_add(expr: Expr) -> Expr {
                     for arg in other_mul_args.iter() {
                         mul.args.push(arg.to_owned())
                     }
-                    Box::new(Expr::Mul(mul))
+                    Expr::new(Expr::Mul(mul))
                 } else {
                     panic!("any other kind of Expr is not expected")
                 }
@@ -209,42 +209,54 @@ mod test {
     }
 
     #[test]
-    fn test_expand_exp_mul() {
-        let expr = Expr::new_pow(
-            Expr::new_mul(
-                Expr::Symbol("x".into()),
-                Expr::new_add(Expr::Symbol("x".into()), Expr::Integer(1)),
-            ),
-            Expr::new_neg(Expr::Symbol("y".into())),
-        );
-        assert_eq!(expr.to_string(), "((x*(x+1))^(-y))");
+    fn test_expand_exp_sum() {
+        let expr = Expr::new_exp(Expr::new_add(
+            Expr::Symbol("x".into()),
+            Expr::new_mul(Expr::Symbol("y".into()), Expr::Integer(2)),
+        ));
+        assert_eq!(expr.to_string(), "exp((x+(y*2)))");
 
         let expr = expand_exp_mul(expr);
-        assert_eq!(expr.to_string(), "((x^(-y))*((x+1)^(-y)))");
+        assert_eq!(expr.to_string(), "(exp(x)*exp((y*2)))");
     }
 
-    #[test]
-    fn test_expand_exp_mul_2() {
-        let expr = Expr::new_pow(
-            Expr::new_mul(
-                Expr::Symbol("x".into()),
-                Expr::new_add(Expr::Symbol("x".into()), Expr::Integer(1)),
-            ),
-            Expr::Integer(2),
-        );
-        assert_eq!(expr.to_string(), "((x*(x+1))^2)");
-
-        let expr = expand_exp_mul(expr);
-        assert_eq!(expr.to_string(), "((x^2)*((x+1)^2))");
-    }
+    // #[test]
+    // fn test_expand_exp_mul() {
+    //     let expr = Expr::new_pow(
+    //         Expr::new_mul(
+    //             Expr::Symbol("x".into()),
+    //             Expr::new_add(Expr::Symbol("x".into()), Expr::Integer(1)),
+    //         ),
+    //         Expr::new_neg(Expr::Symbol("y".into())),
+    //     );
+    //     assert_eq!(expr.to_string(), "((x*(x+1))^(-y))");
+    //
+    //     let expr = expand_exp_mul(expr);
+    //     assert_eq!(expr.to_string(), "((x^(-y))*((x+1)^(-y)))");
+    // }
+    //
+    // #[test]
+    // fn test_expand_exp_mul_2() {
+    //     let expr = Expr::new_pow(
+    //         Expr::new_mul(
+    //             Expr::Symbol("x".into()),
+    //             Expr::new_add(Expr::Symbol("x".into()), Expr::Integer(1)),
+    //         ),
+    //         Expr::Integer(2),
+    //     );
+    //     assert_eq!(expr.to_string(), "((x*(x+1))^2)");
+    //
+    //     let expr = expand_exp_mul(expr);
+    //     assert_eq!(expr.to_string(), "((x^2)*((x+1)^2))");
+    // }
 
     #[test]
     fn test_expand_mul_add() {
         let expr = Expr::Mul(Mul {
             args: vec![
-                Box::new(Expr::new_add(Expr::Symbol("x".into()), Integer(1))),
-                Box::new(Expr::Symbol("y".into())),
-                Box::new(Expr::new_add(Expr::Symbol("z".into()), Integer(2))),
+                Expr::new(Expr::new_add(Expr::Symbol("x".into()), Integer(1))),
+                Expr::new(Expr::Symbol("y".into())),
+                Expr::new(Expr::new_add(Expr::Symbol("z".into()), Integer(2))),
             ],
         });
         assert_eq!(expr.to_string(), "((x+1)*y*(z+2))");
