@@ -123,6 +123,11 @@ impl Expr {
             arg: Expr::new(arg),
         })
     }
+    fn new_ln(arg: Expr) -> Expr {
+        Expr::Ln(Ln {
+            arg: Expr::new(arg),
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
