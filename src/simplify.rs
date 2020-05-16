@@ -1,5 +1,5 @@
-use crate::Add;
 use crate::Mul;
+use crate::{Add, Exp};
 use crate::{Expr, Symbol};
 use std::collections::VecDeque;
 use std::ops::Deref;
@@ -64,7 +64,7 @@ use std::process::exit;
 
 // https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/mul.py#L859
 // exp(x + y) => exp(x) * exp(y)
-fn expand_exp_mul(expr: Expr) -> Expr {
+fn expand_exp_sum(expr: Expr) -> Expr {
     if let Expr::Exp(exp) = expr {
         match *exp.arg {
             Expr::Add(inner_add) => {
@@ -76,6 +76,24 @@ fn expand_exp_mul(expr: Expr) -> Expr {
                 Expr::Mul(Mul { args })
             }
             (arg) => Expr::new_exp(arg),
+        }
+    } else {
+        expr
+    }
+}
+
+fn expand_ln_mul(expr: Expr) -> Expr {
+    if let Expr::Ln(ln) = expr {
+        match *ln.arg {
+            Expr::Mul(inner_mul) => {
+                let args = inner_mul
+                    .args
+                    .into_iter()
+                    .map(|inner_arg| Expr::new(Expr::new_ln(*inner_arg)))
+                    .collect();
+                Expr::Add(Add { args })
+            }
+            (arg) => Expr::new_ln(arg),
         }
     } else {
         expr
@@ -175,7 +193,7 @@ fn expand_mul_add(expr: Expr) -> Expr {
 }
 
 mod test {
-    use crate::simplify::{cross_product, expand_exp_mul, expand_mul_add};
+    use crate::simplify::{cross_product, expand_exp_sum, expand_ln_mul, expand_mul_add};
     use crate::Expr::{Integer, Neg};
     use crate::{Expr, Mul, Symbol};
     use std::fmt::Display;
@@ -216,39 +234,21 @@ mod test {
         ));
         assert_eq!(expr.to_string(), "exp((x+(y*2)))");
 
-        let expr = expand_exp_mul(expr);
+        let expr = expand_exp_sum(expr);
         assert_eq!(expr.to_string(), "(exp(x)*exp((y*2)))");
     }
 
-    // #[test]
-    // fn test_expand_exp_mul() {
-    //     let expr = Expr::new_pow(
-    //         Expr::new_mul(
-    //             Expr::Symbol("x".into()),
-    //             Expr::new_add(Expr::Symbol("x".into()), Expr::Integer(1)),
-    //         ),
-    //         Expr::new_neg(Expr::Symbol("y".into())),
-    //     );
-    //     assert_eq!(expr.to_string(), "((x*(x+1))^(-y))");
-    //
-    //     let expr = expand_exp_mul(expr);
-    //     assert_eq!(expr.to_string(), "((x^(-y))*((x+1)^(-y)))");
-    // }
-    //
-    // #[test]
-    // fn test_expand_exp_mul_2() {
-    //     let expr = Expr::new_pow(
-    //         Expr::new_mul(
-    //             Expr::Symbol("x".into()),
-    //             Expr::new_add(Expr::Symbol("x".into()), Expr::Integer(1)),
-    //         ),
-    //         Expr::Integer(2),
-    //     );
-    //     assert_eq!(expr.to_string(), "((x*(x+1))^2)");
-    //
-    //     let expr = expand_exp_mul(expr);
-    //     assert_eq!(expr.to_string(), "((x^2)*((x+1)^2))");
-    // }
+    #[test]
+    fn test_expand_ln_mul() {
+        let expr = Expr::new_ln(Expr::new_mul(
+            Expr::Symbol("x".into()),
+            Expr::Symbol("y".into()),
+        ));
+        assert_eq!(expr.to_string(), "ln((x*y))");
+
+        let expr = expand_ln_mul(expr);
+        assert_eq!(expr.to_string(), "(ln(x)+ln(y))");
+    }
 
     #[test]
     fn test_expand_mul_add() {
