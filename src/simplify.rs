@@ -1,6 +1,6 @@
-use crate::Mul;
 use crate::{Add, Exp};
 use crate::{Expr, Symbol};
+use crate::{Ln, Mul};
 use std::collections::VecDeque;
 use std::ops::Deref;
 use std::process::exit;
@@ -64,39 +64,31 @@ use std::process::exit;
 
 // https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/mul.py#L859
 // exp(x + y) => exp(x) * exp(y)
-fn expand_exp_sum(expr: Expr) -> Expr {
-    if let Expr::Exp(exp) = expr {
-        match *exp.arg {
-            Expr::Add(inner_add) => {
-                let args = inner_add
-                    .args
-                    .into_iter()
-                    .map(|inner_arg| Expr::new(Expr::new_exp(*inner_arg)))
-                    .collect();
-                Expr::Mul(Mul { args })
-            }
-            (arg) => Expr::new_exp(arg),
+fn expand_exp_sum(exp: Exp) -> Expr {
+    match *exp.arg {
+        Expr::Add(inner_add) => {
+            let args = inner_add
+                .args
+                .into_iter()
+                .map(|inner_arg| Expr::new(Expr::new_exp(*inner_arg)))
+                .collect();
+            Expr::Mul(Mul { args })
         }
-    } else {
-        expr
+        (arg) => Expr::new_exp(arg),
     }
 }
 
-fn expand_ln_mul(expr: Expr) -> Expr {
-    if let Expr::Ln(ln) = expr {
-        match *ln.arg {
-            Expr::Mul(inner_mul) => {
-                let args = inner_mul
-                    .args
-                    .into_iter()
-                    .map(|inner_arg| Expr::new(Expr::new_ln(*inner_arg)))
-                    .collect();
-                Expr::Add(Add { args })
-            }
-            (arg) => Expr::new_ln(arg),
+fn expand_ln_mul(ln: Ln) -> Expr {
+    match *ln.arg {
+        Expr::Mul(inner_mul) => {
+            let args = inner_mul
+                .args
+                .into_iter()
+                .map(|inner_arg| Expr::new(Expr::new_ln(*inner_arg)))
+                .collect();
+            Expr::Add(Add { args })
         }
-    } else {
-        expr
+        (arg) => Expr::new_ln(arg),
     }
 }
 
@@ -118,84 +110,80 @@ where
 // https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/mul.py#L859
 // Handle things like 1/(x*(x + 1)), which are automatically converted
 // to 1/x*1/(x + 1)
-fn expand_mul_add(expr: Expr) -> Expr {
-    if let Expr::Mul(mul) = expr {
-        // first, we need to separate sums from other args
-        let (mul_sum_args, other_mul_args) = (|| {
-            let mut sum_args = Vec::with_capacity(mul.args.len());
-            let mut other_args = Vec::with_capacity(mul.args.len());
-            for arg in mul.args {
-                match *arg {
-                    Expr::Add(add) => sum_args.push(add),
-                    arg => other_args.push(Expr::new(arg)),
-                }
+fn expand_mul_add(mul: Mul) -> Expr {
+    // first, we need to separate sums from other args
+    let (mul_sum_args, other_mul_args) = (|| {
+        let mut sum_args = Vec::with_capacity(mul.args.len());
+        let mut other_args = Vec::with_capacity(mul.args.len());
+        for arg in mul.args {
+            match *arg {
+                Expr::Add(add) => sum_args.push(add),
+                arg => other_args.push(Expr::new(arg)),
             }
-            (sum_args, other_args)
-        })();
+        }
+        (sum_args, other_args)
+    })();
 
-        if mul_sum_args.is_empty() {
-            return Expr::Mul(Mul {
-                args: other_mul_args,
-            });
+    if mul_sum_args.is_empty() {
+        return Expr::Mul(Mul {
+            args: other_mul_args,
+        });
+    }
+
+    // second, calculate all sum products:
+    // xyz(a + b) * (c + d) = xyz(ac + ad + bc + bd)
+    let product_capacity = mul_sum_args
+        .iter()
+        .fold(0usize, |sum, add| sum + add.args.len());
+
+    let sum_of_products_args = (|capacity| {
+        let mut it = mul_sum_args.iter();
+        let first_add = it
+            .next()
+            .expect("there must be at least one item, we've checked already");
+
+        let mut product = Vec::new();
+        for arg in &first_add.args {
+            product.push(arg.clone())
         }
 
-        // second, calculate all sum products:
-        // xyz(a + b) * (c + d) = xyz(ac + ad + bc + bd)
-        let product_capacity = mul_sum_args
-            .iter()
-            .fold(0usize, |sum, add| sum + add.args.len());
+        for sum_arg in it {
+            let new_sum_args = cross_product(&product, &sum_arg.args);
 
-        let sum_of_products_args = (|capacity| {
-            let mut it = mul_sum_args.iter();
-            let first_add = it
-                .next()
-                .expect("there must be at least one item, we've checked already");
-
-            let mut product = Vec::new();
-            for arg in &first_add.args {
+            // replace content of product with new_product
+            product.clear();
+            for arg in new_sum_args {
                 product.push(arg.clone())
             }
+        }
+        product
+    })(product_capacity);
 
-            for sum_arg in it {
-                let new_sum_args = cross_product(&product, &sum_arg.args);
-
-                // replace content of product with new_product
-                product.clear();
-                for arg in new_sum_args {
-                    product.push(arg.clone())
+    // third, multiply each term and other args:
+    // xyz(ac + ad + bc + bd) = xyzac + xyzad + xyzbc + xyzbd
+    let expanded_args = sum_of_products_args
+        .into_iter()
+        .map(|sum_of_products_arg| {
+            if let Expr::Mul(mut mul) = sum_of_products_arg.deref().to_owned() {
+                for arg in other_mul_args.iter() {
+                    mul.args.push(arg.to_owned())
                 }
+                Expr::new(Expr::Mul(mul))
+            } else {
+                panic!("any other kind of Expr is not expected")
             }
-            product
-        })(product_capacity);
-
-        // third, multiply each term and other args:
-        // xyz(ac + ad + bc + bd) = xyzac + xyzad + xyzbc + xyzbd
-        let expanded_args = sum_of_products_args
-            .into_iter()
-            .map(|sum_of_products_arg| {
-                if let Expr::Mul(mut mul) = sum_of_products_arg.deref().to_owned() {
-                    for arg in other_mul_args.iter() {
-                        mul.args.push(arg.to_owned())
-                    }
-                    Expr::new(Expr::Mul(mul))
-                } else {
-                    panic!("any other kind of Expr is not expected")
-                }
-            })
-            .collect();
-
-        Expr::Add(Add {
-            args: expanded_args,
         })
-    } else {
-        expr
-    }
+        .collect();
+
+    Expr::Add(Add {
+        args: expanded_args,
+    })
 }
 
 mod test {
     use crate::simplify::{cross_product, expand_exp_sum, expand_ln_mul, expand_mul_add};
     use crate::Expr::{Integer, Neg};
-    use crate::{Expr, Mul, Symbol};
+    use crate::{Exp, Expr, Ln, Mul, Symbol};
     use std::fmt::Display;
 
     // #[test]
@@ -228,10 +216,12 @@ mod test {
 
     #[test]
     fn test_expand_exp_sum() {
-        let expr = Expr::new_exp(Expr::new_add(
-            Expr::Symbol("x".into()),
-            Expr::new_mul(Expr::Symbol("y".into()), Expr::Integer(2)),
-        ));
+        let expr = Exp {
+            arg: Expr::new(Expr::new_add(
+                Expr::Symbol("x".into()),
+                Expr::new_mul(Expr::Symbol("y".into()), Expr::Integer(2)),
+            )),
+        };
         assert_eq!(expr.to_string(), "exp((x+(y*2)))");
 
         let expr = expand_exp_sum(expr);
@@ -240,10 +230,12 @@ mod test {
 
     #[test]
     fn test_expand_ln_mul() {
-        let expr = Expr::new_ln(Expr::new_mul(
-            Expr::Symbol("x".into()),
-            Expr::Symbol("y".into()),
-        ));
+        let expr = Ln {
+            arg: Expr::new(Expr::new_mul(
+                Expr::Symbol("x".into()),
+                Expr::Symbol("y".into()),
+            )),
+        };
         assert_eq!(expr.to_string(), "ln((x*y))");
 
         let expr = expand_ln_mul(expr);
@@ -252,13 +244,13 @@ mod test {
 
     #[test]
     fn test_expand_mul_add() {
-        let expr = Expr::Mul(Mul {
+        let expr = Mul {
             args: vec![
                 Expr::new(Expr::new_add(Expr::Symbol("x".into()), Integer(1))),
                 Expr::new(Expr::Symbol("y".into())),
                 Expr::new(Expr::new_add(Expr::Symbol("z".into()), Integer(2))),
             ],
-        });
+        };
         assert_eq!(expr.to_string(), "((x+1)*y*(z+2))");
 
         let expr = expand_mul_add(expr);
