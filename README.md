@@ -5,12 +5,12 @@ Inspired by [sympy](https://github.com/sympy/sympy)
 ## TODO
 
 Implement sympy.core functionality:
-- [substitution](https://docs.sympy.org/latest/tutorial/basic_operations.html#substitution)
-- [expand](https://docs.sympy.org/latest/tutorial/simplification.html#expand)
-- [factor](https://docs.sympy.org/latest/tutorial/simplification.html#factor)
-- [collect](https://docs.sympy.org/latest/tutorial/simplification.html#collect)
-- [cancel](https://docs.sympy.org/latest/tutorial/simplification.html#cancel)
-- [apart](https://docs.sympy.org/latest/tutorial/simplification.html#apart)
+- [ ] [expand](https://docs.sympy.org/latest/tutorial/simplification.html#expand)
+- [ ] [substitution](https://docs.sympy.org/latest/tutorial/basic_operations.html#substitution)
+- [ ] [factor](https://docs.sympy.org/latest/tutorial/simplification.html#factor)
+- [ ] [collect](https://docs.sympy.org/latest/tutorial/simplification.html#collect)
+- [ ] [cancel](https://docs.sympy.org/latest/tutorial/simplification.html#cancel)
+- [ ] [apart](https://docs.sympy.org/latest/tutorial/simplification.html#apart)
 
 Use numeric types:  
 https://github.com/rust-num/num
