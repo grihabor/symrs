@@ -200,9 +200,30 @@ fn expand_add_zero(add: Add) -> ExprPtr {
     }
 }
 
+// 1 * x * 2 => x * 2
+fn expand_mul_one(add: Mul) -> ExprPtr {
+    let mut args = add
+        .args
+        .into_iter()
+        .filter(|arg| {
+            if let Expr::Integer(1) = *arg.deref() {
+                false
+            } else {
+                true
+            }
+        })
+        .collect::<Vec<ExprPtr>>();
+    match args.len() {
+        0 => Expr::new(Expr::Integer(1)),
+        1 => args.remove(0),
+        _ => Expr::new(Expr::Mul(Mul { args })),
+    }
+}
+
 mod test {
     use crate::simplify::{
         cross_product, expand_add_zero, expand_exp_sum, expand_ln_mul, expand_mul_add,
+        expand_mul_one,
     };
     use crate::{Add, Exp, Expr, Ln, Mul, Symbol};
     use std::fmt::Display;
@@ -320,6 +341,50 @@ mod test {
         assert_eq!(expr.to_string(), "(0+2+0)");
 
         let expr = expand_add_zero(expr);
+        assert_eq!(expr.to_string(), "2");
+    }
+    #[test]
+    fn test_expand_mul_one_1() {
+        let expr = Mul {
+            args: vec![
+                Expr::new(Expr::Integer(1)),
+                Expr::new(Expr::Symbol("x".into())),
+                Expr::new(Expr::Integer(2)),
+            ],
+        };
+        assert_eq!(expr.to_string(), "(1*x*2)");
+
+        let expr = expand_mul_one(expr);
+        assert_eq!(expr.to_string(), "(x*2)");
+    }
+
+    #[test]
+    fn test_expand_mul_one_2() {
+        let expr = Mul {
+            args: vec![
+                Expr::new(Expr::Integer(1)),
+                Expr::new(Expr::Integer(1)),
+                Expr::new(Expr::Integer(1)),
+            ],
+        };
+        assert_eq!(expr.to_string(), "(1*1*1)");
+
+        let expr = expand_mul_one(expr);
+        assert_eq!(expr.to_string(), "1");
+    }
+
+    #[test]
+    fn test_expand_mul_one_3() {
+        let expr = Mul {
+            args: vec![
+                Expr::new(Expr::Integer(1)),
+                Expr::new(Expr::Integer(2)),
+                Expr::new(Expr::Integer(1)),
+            ],
+        };
+        assert_eq!(expr.to_string(), "(1*2*1)");
+
+        let expr = expand_mul_one(expr);
         assert_eq!(expr.to_string(), "2");
     }
 }
