@@ -180,29 +180,9 @@ fn expand_mul_add(mul: Mul) -> Expr {
     })
 }
 
-// 0 + x + 2 => x + 2
-fn expand_add_zero(add: Add) -> ExprPtr {
-    let mut args = add
-        .args
-        .into_iter()
-        .filter(|arg| {
-            if let Expr::Integer(0) = *arg.deref() {
-                false
-            } else {
-                true
-            }
-        })
-        .collect::<Vec<ExprPtr>>();
-    match args.len() {
-        0 => Expr::new(Expr::Integer(0)),
-        1 => args.remove(0),
-        _ => Expr::new(Expr::Add(Add { args })),
-    }
-}
-
 // 1 * x * 2 => x * 2
-fn expand_mul_one(add: Mul) -> ExprPtr {
-    let mut args = add
+fn expand_mul_one(mul: Mul) -> ExprPtr {
+    let mut args = mul
         .args
         .into_iter()
         .filter(|arg| {
@@ -220,9 +200,32 @@ fn expand_mul_one(add: Mul) -> ExprPtr {
     }
 }
 
+// 3 + 2 + x => 5 + x
+fn expand_add_integer(add: Add) -> ExprPtr {
+    let (sum, mut args) = add
+        .args
+        .into_iter()
+        .fold((0, Vec::new()), |(sum, mut args), arg| {
+            if let Expr::Integer(i) = *arg.deref() {
+                (sum + i, args)
+            } else {
+                args.push(arg);
+                (sum, args)
+            }
+        });
+    if sum != 0 {
+        args.push(Expr::new(Expr::Integer(sum)))
+    }
+    match args.len() {
+        0 => Expr::new(Expr::Integer(0)),
+        1 => args.remove(0),
+        _ => Expr::new(Expr::Add(Add { args })),
+    }
+}
+
 mod test {
     use crate::simplify::{
-        cross_product, expand_add_zero, expand_exp_sum, expand_ln_mul, expand_mul_add,
+        cross_product, expand_add_integer, expand_exp_sum, expand_ln_mul, expand_mul_add,
         expand_mul_one,
     };
     use crate::{Add, Exp, Expr, Ln, Mul, Symbol};
@@ -300,7 +303,7 @@ mod test {
     }
 
     #[test]
-    fn test_expand_add_zero_1() {
+    fn test_expand_add_integer_1() {
         let expr = Add {
             args: vec![
                 Expr::new(Expr::Integer(0)),
@@ -310,12 +313,12 @@ mod test {
         };
         assert_eq!(expr.to_string(), "(0+x+2)");
 
-        let expr = expand_add_zero(expr);
+        let expr = expand_add_integer(expr);
         assert_eq!(expr.to_string(), "(x+2)");
     }
 
     #[test]
-    fn test_expand_add_zero_2() {
+    fn test_expand_add_integer_2() {
         let expr = Add {
             args: vec![
                 Expr::new(Expr::Integer(0)),
@@ -325,12 +328,12 @@ mod test {
         };
         assert_eq!(expr.to_string(), "(0+0+0)");
 
-        let expr = expand_add_zero(expr);
+        let expr = expand_add_integer(expr);
         assert_eq!(expr.to_string(), "0");
     }
 
     #[test]
-    fn test_expand_add_zero_3() {
+    fn test_expand_add_integer_3() {
         let expr = Add {
             args: vec![
                 Expr::new(Expr::Integer(0)),
@@ -340,9 +343,25 @@ mod test {
         };
         assert_eq!(expr.to_string(), "(0+2+0)");
 
-        let expr = expand_add_zero(expr);
+        let expr = expand_add_integer(expr);
         assert_eq!(expr.to_string(), "2");
     }
+
+    #[test]
+    fn test_expand_add_integer_4() {
+        let expr = Add {
+            args: vec![
+                Expr::new(Expr::Integer(2)),
+                Expr::new(Expr::Integer(3)),
+                Expr::new(Expr::Symbol("x".into())),
+            ],
+        };
+        assert_eq!(expr.to_string(), "(2+3+x)");
+
+        let expr = expand_add_integer(expr);
+        assert_eq!(expr.to_string(), "(x+5)");
+    }
+
     #[test]
     fn test_expand_mul_one_1() {
         let expr = Mul {
