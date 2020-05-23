@@ -1,4 +1,4 @@
-use crate::{Add, Exp};
+use crate::{Add, Exp, ExprPtr};
 use crate::{Expr, Symbol};
 use crate::{Ln, Mul};
 use std::collections::VecDeque;
@@ -8,7 +8,7 @@ use std::process::exit;
 // https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/function.py#L2451
 // fn expand(expr: Expr) -> Expr {
 //     match expr {
-//         Expr::Add(add)) => {
+//         Expr::Add(add) => {
 //             match (*add.lhs, *add.rhs) {
 //                 (Expr::Integer(0), add_arg) | (add_arg, Expr::Integer(0)) => add_arg,
 //                 (Expr::Integer(l), Expr::Integer(r)) => Expr::Integer(l + r),
@@ -31,7 +31,7 @@ use std::process::exit;
 //             }
 //         }
 //
-//         Expr::Mul(mul)) => {
+//         Expr::Mul(mul) => {
 //             match (*mul.lhs, *mul.rhs) {
 //                 (Expr::Integer(0), _) | (_, Expr::Integer(0)) => Expr::Integer(0),
 //                 (Expr::Integer(1), mul_arg) | (mul_arg, Expr::Integer(1)) => mul_arg,
@@ -78,6 +78,7 @@ fn expand_exp_sum(exp: Exp) -> Expr {
     }
 }
 
+// ln(a * b) => ln(a) + ln(b)
 fn expand_ln_mul(ln: Ln) -> Expr {
     match *ln.arg {
         Expr::Mul(inner_mul) => {
@@ -108,8 +109,7 @@ where
 }
 
 // https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/mul.py#L859
-// Handle things like 1/(x*(x + 1)), which are automatically converted
-// to 1/x*1/(x + 1)
+// (a + b) * (c + d) => ac + ad + bc + bd
 fn expand_mul_add(mul: Mul) -> Expr {
     // first, we need to separate sums from other args
     let (mul_sum_args, other_mul_args) = (|| {
@@ -142,7 +142,7 @@ fn expand_mul_add(mul: Mul) -> Expr {
             .next()
             .expect("there must be at least one item, we've checked already");
 
-        let mut product = Vec::new();
+        let mut product = Vec::with_capacity(capacity);
         for arg in &first_add.args {
             product.push(arg.clone())
         }
@@ -180,10 +180,31 @@ fn expand_mul_add(mul: Mul) -> Expr {
     })
 }
 
+// 0 + x + 2 => x + 2
+fn expand_add_zero(add: Add) -> ExprPtr {
+    let mut args = add
+        .args
+        .into_iter()
+        .filter(|arg| {
+            if let Expr::Integer(0) = *arg.deref() {
+                false
+            } else {
+                true
+            }
+        })
+        .collect::<Vec<ExprPtr>>();
+    match args.len() {
+        0 => Expr::new(Expr::Integer(0)),
+        1 => args.remove(0),
+        _ => Expr::new(Expr::Add(Add { args })),
+    }
+}
+
 mod test {
-    use crate::simplify::{cross_product, expand_exp_sum, expand_ln_mul, expand_mul_add};
-    use crate::Expr::{Integer, Neg};
-    use crate::{Exp, Expr, Ln, Mul, Symbol};
+    use crate::simplify::{
+        cross_product, expand_add_zero, expand_exp_sum, expand_ln_mul, expand_mul_add,
+    };
+    use crate::{Add, Exp, Expr, Ln, Mul, Symbol};
     use std::fmt::Display;
 
     // #[test]
@@ -246,14 +267,59 @@ mod test {
     fn test_expand_mul_add() {
         let expr = Mul {
             args: vec![
-                Expr::new(Expr::new_add(Expr::Symbol("x".into()), Integer(1))),
+                Expr::new(Expr::new_add(Expr::Symbol("x".into()), Expr::Integer(1))),
                 Expr::new(Expr::Symbol("y".into())),
-                Expr::new(Expr::new_add(Expr::Symbol("z".into()), Integer(2))),
+                Expr::new(Expr::new_add(Expr::Symbol("z".into()), Expr::Integer(2))),
             ],
         };
         assert_eq!(expr.to_string(), "((x+1)*y*(z+2))");
 
         let expr = expand_mul_add(expr);
         assert_eq!(expr.to_string(), "((x*z*y)+(x*2*y)+(1*z*y)+(1*2*y))");
+    }
+
+    #[test]
+    fn test_expand_add_zero_1() {
+        let expr = Add {
+            args: vec![
+                Expr::new(Expr::Integer(0)),
+                Expr::new(Expr::Symbol("x".into())),
+                Expr::new(Expr::Integer(2)),
+            ],
+        };
+        assert_eq!(expr.to_string(), "(0+x+2)");
+
+        let expr = expand_add_zero(expr);
+        assert_eq!(expr.to_string(), "(x+2)");
+    }
+
+    #[test]
+    fn test_expand_add_zero_2() {
+        let expr = Add {
+            args: vec![
+                Expr::new(Expr::Integer(0)),
+                Expr::new(Expr::Integer(0)),
+                Expr::new(Expr::Integer(0)),
+            ],
+        };
+        assert_eq!(expr.to_string(), "(0+0+0)");
+
+        let expr = expand_add_zero(expr);
+        assert_eq!(expr.to_string(), "0");
+    }
+
+    #[test]
+    fn test_expand_add_zero_3() {
+        let expr = Add {
+            args: vec![
+                Expr::new(Expr::Integer(0)),
+                Expr::new(Expr::Integer(2)),
+                Expr::new(Expr::Integer(0)),
+            ],
+        };
+        assert_eq!(expr.to_string(), "(0+2+0)");
+
+        let expr = expand_add_zero(expr);
+        assert_eq!(expr.to_string(), "2");
     }
 }
