@@ -180,26 +180,6 @@ fn expand_mul_add(mul: Mul) -> Expr {
     })
 }
 
-// 1 * x * 2 => x * 2
-fn expand_mul_one(mul: Mul) -> ExprPtr {
-    let mut args = mul
-        .args
-        .into_iter()
-        .filter(|arg| {
-            if let Expr::Integer(1) = *arg.deref() {
-                false
-            } else {
-                true
-            }
-        })
-        .collect::<Vec<ExprPtr>>();
-    match args.len() {
-        0 => Expr::new(Expr::Integer(1)),
-        1 => args.remove(0),
-        _ => Expr::new(Expr::Mul(Mul { args })),
-    }
-}
-
 // 3 + 2 + x => 5 + x
 fn expand_add_integer(add: Add) -> ExprPtr {
     let (sum, mut args) = add
@@ -220,6 +200,26 @@ fn expand_add_integer(add: Add) -> ExprPtr {
         0 => Expr::new(Expr::Integer(0)),
         1 => args.remove(0),
         _ => Expr::new(Expr::Add(Add { args })),
+    }
+}
+
+// 1 * x * 2 => x * 2
+fn expand_mul_one(mul: Mul) -> ExprPtr {
+    let mut args = mul
+        .args
+        .into_iter()
+        .filter(|arg| {
+            if let Expr::Integer(1) = *arg.deref() {
+                false
+            } else {
+                true
+            }
+        })
+        .collect::<Vec<ExprPtr>>();
+    match args.len() {
+        0 => Expr::new(Expr::Integer(1)),
+        1 => args.remove(0),
+        _ => Expr::new(Expr::Mul(Mul { args })),
     }
 }
 
