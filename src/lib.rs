@@ -107,15 +107,25 @@ impl Expr {
     }
 
     fn new_add(lhs: Expr, rhs: Expr) -> Expr {
-        Expr::Add(Add {
-            args: vec![Expr::new(lhs), Expr::new(rhs)],
-        })
+        let append = |args: &mut Vec<ExprPtr>, expr| match expr {
+            Expr::Add(mut add) => args.append(&mut add.args),
+            expr => args.push(Expr::new(expr)),
+        };
+        let mut args = Vec::new();
+        append(&mut args, lhs);
+        append(&mut args, rhs);
+        Expr::Add(Add { args })
     }
 
     fn new_mul(lhs: Expr, rhs: Expr) -> Expr {
-        Expr::Mul(Mul {
-            args: vec![Expr::new(lhs), Expr::new(rhs)],
-        })
+        let append = |args: &mut Vec<ExprPtr>, expr| match expr {
+            Expr::Mul(mut mul) => args.append(&mut mul.args),
+            expr => args.push(Expr::new(expr)),
+        };
+        let mut args = Vec::new();
+        append(&mut args, lhs);
+        append(&mut args, rhs);
+        Expr::Mul(Mul { args })
     }
 
     fn new_exp(arg: Expr) -> Expr {
@@ -241,11 +251,27 @@ impl std::ops::Mul for Expr {
     }
 }
 
+impl std::ops::Mul<i64> for Expr {
+    type Output = Expr;
+
+    fn mul(self, rhs: i64) -> Self::Output {
+        Expr::new_mul(self, Expr::Integer(rhs))
+    }
+}
+
 impl std::ops::Add for Expr {
     type Output = Expr;
 
     fn add(self, rhs: Self) -> Self::Output {
         Expr::new_add(self, rhs)
+    }
+}
+
+impl std::ops::Add<i64> for Expr {
+    type Output = Expr;
+
+    fn add(self, rhs: i64) -> Self::Output {
+        Expr::new_add(self, Expr::Integer(rhs))
     }
 }
 

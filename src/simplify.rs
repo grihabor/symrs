@@ -239,6 +239,13 @@ mod test {
     use crate::{Add, Exp, Expr, Ln, Mul, Symbol};
     use std::fmt::Display;
 
+    fn x() -> Expr {
+        Expr::Symbol("x".into())
+    }
+    fn y() -> Expr {
+        Expr::Symbol("y".into())
+    }
+
     // #[test]
     // fn test_expand() {
     //     let expr = Expr::new_mul(
@@ -269,16 +276,15 @@ mod test {
 
     #[test]
     fn test_expand_exp_sum() {
-        let expr = Exp {
-            arg: Expr::new(Expr::new_add(
-                Expr::Symbol("x".into()),
-                Expr::new_mul(Expr::Symbol("y".into()), Expr::Integer(2)),
-            )),
-        };
+        let expr = Expr::new_exp(x() + y() * 2);
         assert_eq!(expr.to_string(), "exp((x+(y*2)))");
 
-        let expr = expand_exp_sum(expr);
-        assert_eq!(expr.to_string(), "(exp(x)*exp((y*2)))");
+        if let Expr::Exp(exp) = expr {
+            let expr = expand_exp_sum(exp);
+            assert_eq!(expr.to_string(), "(exp(x)*exp((y*2)))");
+        } else {
+            assert!(false)
+        }
     }
 
     #[test]
