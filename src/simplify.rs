@@ -307,151 +307,91 @@ mod test {
 
     #[test]
     fn test_expand_add_integer_1() {
-        let expr = Add {
-            args: vec![
-                Expr::new(Expr::Integer(0)),
-                Expr::new(Expr::Symbol("x".into())),
-                Expr::new(Expr::Integer(2)),
-            ],
-        };
+        let expr = Expr::Integer(0) + x() + 2;
         assert_eq!(expr.to_string(), "(0+x+2)");
 
-        let expr = expand_add_integers(expr);
+        let expr = expand_add_integers(expr.try_into().unwrap());
         assert_eq!(expr.to_string(), "(x+2)");
     }
 
     #[test]
     fn test_expand_add_integer_2() {
-        let expr = Add {
-            args: vec![
-                Expr::new(Expr::Integer(0)),
-                Expr::new(Expr::Integer(0)),
-                Expr::new(Expr::Integer(0)),
-            ],
-        };
+        let expr = Expr::Integer(0) + 0 + 0;
         assert_eq!(expr.to_string(), "(0+0+0)");
 
-        let expr = expand_add_integers(expr);
+        let expr = expand_add_integers(expr.try_into().unwrap());
         assert_eq!(expr.to_string(), "0");
     }
 
     #[test]
     fn test_expand_add_integer_3() {
-        let expr = Add {
-            args: vec![
-                Expr::new(Expr::Integer(0)),
-                Expr::new(Expr::Integer(2)),
-                Expr::new(Expr::Integer(0)),
-            ],
-        };
+        let expr = Expr::Integer(0) + 2 + 0;
         assert_eq!(expr.to_string(), "(0+2+0)");
 
-        let expr = expand_add_integers(expr);
+        let expr = expand_add_integers(expr.try_into().unwrap());
         assert_eq!(expr.to_string(), "2");
     }
 
     #[test]
     fn test_expand_add_integer_4() {
-        let expr = Add {
-            args: vec![
-                Expr::new(Expr::Integer(2)),
-                Expr::new(Expr::Integer(3)),
-                Expr::new(Expr::Symbol("x".into())),
-            ],
-        };
+        let expr = Expr::Integer(2) + 3 + x();
         assert_eq!(expr.to_string(), "(2+3+x)");
 
-        let expr = expand_add_integers(expr);
+        let expr = expand_add_integers(expr.try_into().unwrap());
         assert_eq!(expr.to_string(), "(x+5)");
     }
 
     #[test]
     fn test_expand_mul_one_1() {
-        let expr = Mul {
-            args: vec![
-                Expr::new(Expr::Integer(1)),
-                Expr::new(Expr::Symbol("x".into())),
-                Expr::new(Expr::Integer(2)),
-            ],
-        };
+        let expr = Expr::Integer(1) * x() * 2;
         assert_eq!(expr.to_string(), "(1*x*2)");
 
-        let expr = expand_mul_integers(expr);
+        let expr = expand_mul_integers(expr.try_into().unwrap());
         assert_eq!(expr.to_string(), "(x*2)");
     }
 
     #[test]
     fn test_expand_mul_one_2() {
-        let expr = Mul {
-            args: vec![
-                Expr::new(Expr::Integer(1)),
-                Expr::new(Expr::Integer(1)),
-                Expr::new(Expr::Integer(1)),
-            ],
-        };
+        let expr = Expr::Integer(1) * 1 * 1;
         assert_eq!(expr.to_string(), "(1*1*1)");
 
-        let expr = expand_mul_integers(expr);
+        let expr = expand_mul_integers(expr.try_into().unwrap());
         assert_eq!(expr.to_string(), "1");
     }
 
     #[test]
     fn test_expand_mul_one_3() {
-        let expr = Mul {
-            args: vec![
-                Expr::new(Expr::Integer(1)),
-                Expr::new(Expr::Integer(2)),
-                Expr::new(Expr::Integer(1)),
-            ],
-        };
+        let expr = Expr::Integer(1) * 2 * 1;
         assert_eq!(expr.to_string(), "(1*2*1)");
 
-        let expr = expand_mul_integers(expr);
+        let expr = expand_mul_integers(expr.try_into().unwrap());
         assert_eq!(expr.to_string(), "2");
     }
 
     #[test]
     fn test_expand_mul_one_4() {
-        let expr = Mul {
-            args: vec![
-                Expr::new(Expr::Integer(1)),
-                Expr::new(Expr::Symbol("x".into())),
-                Expr::new(Expr::Integer(0)),
-            ],
-        };
+        let expr = Expr::Integer(1) * x() * 0;
         assert_eq!(expr.to_string(), "(1*x*0)");
 
-        let expr = expand_mul_integers(expr);
+        let expr = expand_mul_integers(expr.try_into().unwrap());
         assert_eq!(expr.to_string(), "0");
     }
 
     #[test]
     fn test_expand_mul_one_5() {
-        let expr = Mul {
-            args: vec![
-                Expr::new(Expr::Integer(1)),
-                Expr::new(Expr::Symbol("x".into())),
-                Expr::new(Expr::Integer(1)),
-            ],
-        };
+        let expr = Expr::Integer(1) * x() * 1;
         assert_eq!(expr.to_string(), "(1*x*1)");
 
-        let expr = expand_mul_integers(expr);
+        let expr = expand_mul_integers(expr.try_into().unwrap());
         assert_eq!(expr.to_string(), "x");
     }
 
     #[test]
     fn test_expand_mul_one_6() {
-        let expr = Mul {
-            args: vec![
-                Expr::new(Expr::Integer(3)),
-                Expr::new(Expr::Symbol("x".into())),
-                Expr::new(Expr::Integer(2)),
-            ],
-        };
+        let expr = Expr::Integer(3) * x() * 2;
         assert_eq!(expr.to_string(), "(3*x*2)");
 
-        let expr = expand_mul_integers(expr);
+        let expr = expand_mul_integers(expr.try_into().unwrap());
         assert_eq!(expr.to_string(), "(x*6)");
     }
 }

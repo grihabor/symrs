@@ -178,6 +178,18 @@ impl TryFrom<Expr> for Mul {
     }
 }
 
+impl TryFrom<Expr> for Add {
+    type Error = String;
+
+    fn try_from(value: Expr) -> Result<Self, Self::Error> {
+        if let Expr::Add(add) = value {
+            Ok(add)
+        } else {
+            Err(format!("expected Expr::Add, got {:?}", value))
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Symbol {
     name: String,
