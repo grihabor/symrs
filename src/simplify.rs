@@ -1,3 +1,4 @@
+use crate::simplify::MaybeChanged::{Changed, Same};
 use crate::{Add, Exp, ExprPtr};
 use crate::{Expr, Symbol};
 use crate::{Ln, Mul};
@@ -5,62 +6,33 @@ use std::collections::VecDeque;
 use std::ops::Deref;
 use std::process::exit;
 
+fn expand_vec(args: Vec<ExprPtr>) -> Vec<ExprPtr> {
+    args.into_iter().map(|arg| expand(arg)).collect()
+}
+
 // https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/function.py#L2451
-// fn expand(expr: Expr) -> Expr {
-//     match expr {
-//         Expr::Add(add) => {
-//             match (*add.lhs, *add.rhs) {
-//                 (Expr::Integer(0), add_arg) | (add_arg, Expr::Integer(0)) => add_arg,
-//                 (Expr::Integer(l), Expr::Integer(r)) => Expr::Integer(l + r),
-//
-//                 (lhs @ Expr::Symbol(_), rhs @ Expr::Integer(_)) => {
-//                     // swap operands
-//                     expand(Expr::new_add(rhs, lhs))
-//                 }
-//
-//                 (Expr::Add(left_add)), rhs) => {
-//                     // change add order: ((a + b) + c) => (a + (b + c))
-//                     expand(Expr::new_add(
-//                         *left_add.lhs,
-//                         Expr::new_add(*left_add.rhs, rhs),
-//                     ))
-//                 }
-//
-//                 // create the same add expression again to avoid borrow problems with expr
-//                 (lhs, rhs) => Expr::new_add(lhs, rhs),
-//             }
-//         }
-//
-//         Expr::Mul(mul) => {
-//             match (*mul.lhs, *mul.rhs) {
-//                 (Expr::Integer(0), _) | (_, Expr::Integer(0)) => Expr::Integer(0),
-//                 (Expr::Integer(1), mul_arg) | (mul_arg, Expr::Integer(1)) => mul_arg,
-//                 (Expr::Integer(l), Expr::Integer(r)) => Expr::Integer(l * r),
-//
-//                 (Expr::Add(add)), mul_arg)
-//                 | (mul_arg, Expr::Add(add))) => expand(Expr::new_add(
-//                     expand(Expr::new_mul_clone(add.lhs.deref(), &mul_arg)),
-//                     expand(Expr::new_mul_clone(add.rhs.deref(), &mul_arg)),
-//                 )),
-//
-//                 // this match arm must be in the end because we must try
-//                 // to expand the expression first and only if we fail
-//                 // we need to swap operands and try again.
-//                 (lhs @ Expr::Symbol(_), rhs @ Expr::Integer(_))
-//                 | (lhs @ Expr::Symbol(_), rhs @ Expr::Add(_))) => {
-//                     // swap operands
-//                     expand(Expr::new_mul(rhs, lhs))
-//                 }
-//
-//                 // default case:
-//                 // create the same mul expression again to avoid borrow problems with expr
-//                 (lhs, rhs) => Expr::new_mul(lhs, rhs),
-//             }
-//         }
-//
-//         _ => expr,
-//     }
-// }
+fn expand(expr_ptr: ExprPtr) -> ExprPtr {
+    let expr = *expr_ptr;
+    match expr {
+        Expr::Add(add) => {
+            let args = expand_vec(add.args);
+            expand_add_integers(Add { args })
+        }
+        Expr::Mul(mul) => {
+            let args = expand_vec(mul.args);
+            let expanded_integers = *expand_mul_integers(Mul { args });
+            let expanded_mul = match expanded_integers {
+                Expr::Mul(mul) => expand_mul_add(mul),
+                expanded => Same(Expr::new(expanded)),
+            };
+            match expanded_mul {
+                Changed(expr) => expand(expr),
+                Same(expr) => expr,
+            }
+        }
+        expr => Expr::new(expr),
+    }
+}
 
 // https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/mul.py#L859
 // exp(x + y) => exp(x) * exp(y)
@@ -108,26 +80,30 @@ where
     result
 }
 
+enum MaybeChanged {
+    Changed(ExprPtr),
+    Same(ExprPtr),
+}
+
 // https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/mul.py#L859
 // (a + b) * (c + d) => ac + ad + bc + bd
-fn expand_mul_add(mul: Mul) -> Expr {
+fn expand_mul_add(mul: Mul) -> MaybeChanged {
     // first, we need to separate sums from other args
-    let (mul_sum_args, other_mul_args) = (|| {
-        let mut sum_args = Vec::with_capacity(mul.args.len());
-        let mut other_args = Vec::with_capacity(mul.args.len());
-        for arg in mul.args {
+    let (mul_sum_args, other_mul_args) = mul.args.into_iter().fold(
+        (Vec::new(), Vec::new()),
+        |(mut sum_args, mut other_args), arg| {
             match *arg {
                 Expr::Add(add) => sum_args.push(add),
                 arg => other_args.push(Expr::new(arg)),
-            }
-        }
-        (sum_args, other_args)
-    })();
+            };
+            (sum_args, other_args)
+        },
+    );
 
     if mul_sum_args.is_empty() {
-        return Expr::Mul(Mul {
+        return Same(Expr::new(Expr::Mul(Mul {
             args: other_mul_args,
-        });
+        })));
     }
 
     // second, calculate all sum products:
@@ -175,9 +151,9 @@ fn expand_mul_add(mul: Mul) -> Expr {
         })
         .collect();
 
-    Expr::Add(Add {
+    Changed(Expr::new(Expr::Add(Add {
         args: expanded_args,
-    })
+    })))
 }
 
 // 3 + 2 + x => 5 + x
@@ -232,11 +208,12 @@ fn expand_mul_integers(mul: Mul) -> ExprPtr {
 }
 
 mod test {
+    use crate::simplify::MaybeChanged::Changed;
     use crate::simplify::{
-        cross_product, expand_add_integers, expand_exp_sum, expand_ln_mul, expand_mul_add,
-        expand_mul_integers,
+        cross_product, expand, expand_add_integers, expand_exp_sum, expand_ln_mul, expand_mul_add,
+        expand_mul_integers, MaybeChanged,
     };
-    use crate::{Add, Exp, Expr, Ln, Mul, Symbol};
+    use crate::{Add, Exp, Expr, ExprPtr, Ln, Mul, Symbol};
     use std::convert::TryInto;
     use std::fmt::Display;
 
@@ -249,18 +226,22 @@ mod test {
     fn z() -> Expr {
         Expr::Symbol("z".into())
     }
+    fn unwrap_changed(expr: MaybeChanged) -> ExprPtr {
+        if let Changed(expr) = expr {
+            expr
+        } else {
+            panic!("same")
+        }
+    }
 
-    // #[test]
-    // fn test_expand() {
-    //     let expr = Expr::new_mul(
-    //         Expr::new_add(Expr::Integer(2), Expr::Symbol("y".into())),
-    //         Expr::new_add(Expr::Symbol("x".into()), Expr::Integer(3)),
-    //     );
-    //     assert_eq!(expr.to_string(), "((2+y)*(x+3))");
-    //
-    //     let expr = expand(expr);
-    //     assert_eq!(expr.to_string(), "((2*x)+(6+((x*y)+(3*y))))");
-    // }
+    #[test]
+    fn test_expand() {
+        let expr = (Expr::Integer(2) + y()) * (x() + 3);
+        assert_eq!(expr.to_string(), "((2+y)*(x+3))");
+
+        let expr = expand(Expr::new(expr));
+        assert_eq!(expr.to_string(), "((y*x)+(y*3)+(x*2)+6)");
+    }
 
     #[test]
     fn test_cross_product() {
@@ -301,7 +282,7 @@ mod test {
         let expr = (x() + 1) * y() * (z() + 2);
         assert_eq!(expr.to_string(), "((x+1)*y*(z+2))");
 
-        let expr = expand_mul_add(expr.try_into().unwrap());
+        let expr = unwrap_changed(expand_mul_add(expr.try_into().unwrap()));
         assert_eq!(expr.to_string(), "((x*z*y)+(x*2*y)+(1*z*y)+(1*2*y))");
     }
 
