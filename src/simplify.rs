@@ -237,6 +237,7 @@ mod test {
         expand_mul_integers,
     };
     use crate::{Add, Exp, Expr, Ln, Mul, Symbol};
+    use std::convert::TryInto;
     use std::fmt::Display;
 
     fn x() -> Expr {
@@ -244,6 +245,9 @@ mod test {
     }
     fn y() -> Expr {
         Expr::Symbol("y".into())
+    }
+    fn z() -> Expr {
+        Expr::Symbol("z".into())
     }
 
     // #[test]
@@ -279,40 +283,25 @@ mod test {
         let expr = Expr::new_exp(x() + y() * 2);
         assert_eq!(expr.to_string(), "exp((x+(y*2)))");
 
-        if let Expr::Exp(exp) = expr {
-            let expr = expand_exp_sum(exp);
-            assert_eq!(expr.to_string(), "(exp(x)*exp((y*2)))");
-        } else {
-            assert!(false)
-        }
+        let expr = expand_exp_sum(expr.try_into().unwrap());
+        assert_eq!(expr.to_string(), "(exp(x)*exp((y*2)))");
     }
 
     #[test]
     fn test_expand_ln_mul() {
-        let expr = Ln {
-            arg: Expr::new(Expr::new_mul(
-                Expr::Symbol("x".into()),
-                Expr::Symbol("y".into()),
-            )),
-        };
+        let expr = Expr::new_ln(x() * y());
         assert_eq!(expr.to_string(), "ln((x*y))");
 
-        let expr = expand_ln_mul(expr);
+        let expr = expand_ln_mul(expr.try_into().unwrap());
         assert_eq!(expr.to_string(), "(ln(x)+ln(y))");
     }
 
     #[test]
     fn test_expand_mul_add() {
-        let expr = Mul {
-            args: vec![
-                Expr::new(Expr::new_add(Expr::Symbol("x".into()), Expr::Integer(1))),
-                Expr::new(Expr::Symbol("y".into())),
-                Expr::new(Expr::new_add(Expr::Symbol("z".into()), Expr::Integer(2))),
-            ],
-        };
+        let expr = (x() + 1) * y() * (z() + 2);
         assert_eq!(expr.to_string(), "((x+1)*y*(z+2))");
 
-        let expr = expand_mul_add(expr);
+        let expr = expand_mul_add(expr.try_into().unwrap());
         assert_eq!(expr.to_string(), "((x*z*y)+(x*2*y)+(1*z*y)+(1*2*y))");
     }
 

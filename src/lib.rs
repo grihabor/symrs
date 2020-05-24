@@ -1,7 +1,8 @@
 mod simplify;
 
 use num::Integer;
-use std::fmt::{Binary, Debug, Display, Formatter, Pointer, Write};
+use std::convert::TryFrom;
+use std::fmt::{Binary, Debug, Display, Error, Formatter, Pointer, Write};
 use std::ops::Deref;
 
 #[derive(Debug, Clone)]
@@ -133,10 +134,47 @@ impl Expr {
             arg: Expr::new(arg),
         })
     }
+
     fn new_ln(arg: Expr) -> Expr {
         Expr::Ln(Ln {
             arg: Expr::new(arg),
         })
+    }
+}
+
+impl TryFrom<Expr> for Ln {
+    type Error = String;
+
+    fn try_from(value: Expr) -> Result<Self, Self::Error> {
+        if let Expr::Ln(ln) = value {
+            Ok(ln)
+        } else {
+            Err(format!("expected Expr::Ln, got {:?}", value))
+        }
+    }
+}
+
+impl TryFrom<Expr> for Exp {
+    type Error = String;
+
+    fn try_from(value: Expr) -> Result<Self, Self::Error> {
+        if let Expr::Exp(exp) = value {
+            Ok(exp)
+        } else {
+            Err(format!("expected Expr::Exp, got {:?}", value))
+        }
+    }
+}
+
+impl TryFrom<Expr> for Mul {
+    type Error = String;
+
+    fn try_from(value: Expr) -> Result<Self, Self::Error> {
+        if let Expr::Mul(mul) = value {
+            Ok(mul)
+        } else {
+            Err(format!("expected Expr::Mul, got {:?}", value))
+        }
     }
 }
 
