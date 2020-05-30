@@ -16,7 +16,10 @@ fn expand(expr_ptr: ExprPtr) -> ExprPtr {
     match expr {
         Expr::Add(add) => {
             let args = expand_vec(add.args);
-            expand_add_integers(Add { args })
+            match expand_add_integers(Add { args }) {
+                Same(expr) => expr,
+                Changed(expr) => expr,
+            }
         }
         Expr::Mul(mul) => {
             let args = expand_vec(mul.args);
@@ -51,7 +54,7 @@ fn expand_exp_sum(exp: Exp) -> Expr {
 }
 
 // ln(a * b) => ln(a) + ln(b)
-fn expand_ln_mul(ln: Ln) -> Expr {
+fn expand_ln_mul(ln: Ln) -> MaybeChanged {
     match *ln.arg {
         Expr::Mul(inner_mul) => {
             let args = inner_mul
@@ -59,9 +62,9 @@ fn expand_ln_mul(ln: Ln) -> Expr {
                 .into_iter()
                 .map(|inner_arg| Expr::new(Expr::new_ln(*inner_arg)))
                 .collect();
-            Expr::Add(Add { args })
+            Changed(Expr::new(Expr::Add(Add { args })))
         }
-        (arg) => Expr::new_ln(arg),
+        (arg) => Same(Expr::new(Expr::new_ln(arg))),
     }
 }
 
@@ -157,7 +160,8 @@ fn expand_mul_add(mul: Mul) -> MaybeChanged {
 }
 
 // 3 + 2 + x => 5 + x
-fn expand_add_integers(add: Add) -> ExprPtr {
+fn expand_add_integers(add: Add) -> MaybeChanged {
+    let len_before = add.args.len();
     let (sum, mut args) = add
         .args
         .into_iter()
@@ -172,10 +176,15 @@ fn expand_add_integers(add: Add) -> ExprPtr {
     if sum != 0 {
         args.push(Expr::new(Expr::Integer(sum)))
     }
+    let variant = if args.len() == len_before {
+        Same
+    } else {
+        Changed
+    };
     match args.len() {
-        0 => Expr::new(Expr::Integer(0)),
-        1 => args.remove(0),
-        _ => Expr::new(Expr::Add(Add { args })),
+        0 => variant(Expr::new(Expr::Integer(0))),
+        1 => variant(args.remove(0)),
+        _ => variant(Expr::new(Expr::Add(Add { args }))),
     }
 }
 
@@ -273,7 +282,7 @@ mod test {
         let expr = Expr::new_ln(x() * y());
         assert_eq!(expr.to_string(), "ln((x*y))");
 
-        let expr = expand_ln_mul(expr.try_into().unwrap());
+        let expr = unwrap_changed(expand_ln_mul(expr.try_into().unwrap()));
         assert_eq!(expr.to_string(), "(ln(x)+ln(y))");
     }
 
@@ -291,7 +300,7 @@ mod test {
         let expr = Expr::Integer(0) + x() + 2;
         assert_eq!(expr.to_string(), "(0+x+2)");
 
-        let expr = expand_add_integers(expr.try_into().unwrap());
+        let expr = unwrap_changed(expand_add_integers(expr.try_into().unwrap()));
         assert_eq!(expr.to_string(), "(x+2)");
     }
 
@@ -300,7 +309,7 @@ mod test {
         let expr = Expr::Integer(0) + 0 + 0;
         assert_eq!(expr.to_string(), "(0+0+0)");
 
-        let expr = expand_add_integers(expr.try_into().unwrap());
+        let expr = unwrap_changed(expand_add_integers(expr.try_into().unwrap()));
         assert_eq!(expr.to_string(), "0");
     }
 
@@ -309,7 +318,7 @@ mod test {
         let expr = Expr::Integer(0) + 2 + 0;
         assert_eq!(expr.to_string(), "(0+2+0)");
 
-        let expr = expand_add_integers(expr.try_into().unwrap());
+        let expr = unwrap_changed(expand_add_integers(expr.try_into().unwrap()));
         assert_eq!(expr.to_string(), "2");
     }
 
@@ -318,7 +327,7 @@ mod test {
         let expr = Expr::Integer(2) + 3 + x();
         assert_eq!(expr.to_string(), "(2+3+x)");
 
-        let expr = expand_add_integers(expr.try_into().unwrap());
+        let expr = unwrap_changed(expand_add_integers(expr.try_into().unwrap()));
         assert_eq!(expr.to_string(), "(x+5)");
     }
 
