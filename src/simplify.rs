@@ -23,7 +23,10 @@ fn expand(expr_ptr: ExprPtr) -> ExprPtr {
         }
         Expr::Mul(mul) => {
             let args = expand_vec(mul.args);
-            let expanded_integers = *expand_mul_integers(Mul { args });
+            let expanded_integers = *match expand_mul_integers(Mul { args }) {
+                Same(expr) => expr,
+                Changed(expr) => expr,
+            };
             let expanded_mul = match expanded_integers {
                 Expr::Mul(mul) => expand_mul_add(mul),
                 expanded => Same(Expr::new(expanded)),
@@ -176,20 +179,26 @@ fn expand_add_integers(add: Add) -> MaybeChanged {
     if sum != 0 {
         args.push(Expr::new(Expr::Integer(sum)))
     }
-    let variant = if args.len() == len_before {
-        Same
-    } else {
-        Changed
-    };
     match args.len() {
-        0 => variant(Expr::new(Expr::Integer(0))),
-        1 => variant(args.remove(0)),
-        _ => variant(Expr::new(Expr::Add(Add { args }))),
+        // was Add, became Integer
+        0 => Changed(Expr::new(Expr::Integer(0))),
+        // was Add, became the Add argument
+        1 => Changed(args.remove(0)),
+        // compare len
+        _ => {
+            let variant = if args.len() == len_before {
+                Same
+            } else {
+                Changed
+            };
+            variant(Expr::new(Expr::Add(Add { args })))
+        }
     }
 }
 
 // 1 * x * 2 => x * 2
-fn expand_mul_integers(mul: Mul) -> ExprPtr {
+fn expand_mul_integers(mul: Mul) -> MaybeChanged {
+    let len_before = mul.args.len();
     let (product, mut args) =
         mul.args
             .into_iter()
@@ -202,7 +211,8 @@ fn expand_mul_integers(mul: Mul) -> ExprPtr {
                 }
             });
     let mut args = match product {
-        0 => return Expr::new(Expr::Integer(0)),
+        // was Mul, became Integer
+        0 => return Changed(Expr::new(Expr::Integer(0))),
         1 => args,
         product => {
             args.push(Expr::new(Expr::Integer(product)));
@@ -210,9 +220,16 @@ fn expand_mul_integers(mul: Mul) -> ExprPtr {
         }
     };
     match args.len() {
-        0 => Expr::new(Expr::Integer(1)),
-        1 => args.remove(0),
-        _ => Expr::new(Expr::Mul(Mul { args })),
+        0 => Changed(Expr::new(Expr::Integer(1))),
+        1 => Changed(args.remove(0)),
+        _ => {
+            let variant = if len_before == args.len() {
+                Same
+            } else {
+                Changed
+            };
+            variant(Expr::new(Expr::Mul(Mul { args })))
+        }
     }
 }
 
@@ -336,7 +353,7 @@ mod test {
         let expr = Expr::Integer(1) * x() * 2;
         assert_eq!(expr.to_string(), "(1*x*2)");
 
-        let expr = expand_mul_integers(expr.try_into().unwrap());
+        let expr = unwrap_changed(expand_mul_integers(expr.try_into().unwrap()));
         assert_eq!(expr.to_string(), "(x*2)");
     }
 
@@ -345,7 +362,7 @@ mod test {
         let expr = Expr::Integer(1) * 1 * 1;
         assert_eq!(expr.to_string(), "(1*1*1)");
 
-        let expr = expand_mul_integers(expr.try_into().unwrap());
+        let expr = unwrap_changed(expand_mul_integers(expr.try_into().unwrap()));
         assert_eq!(expr.to_string(), "1");
     }
 
@@ -354,7 +371,7 @@ mod test {
         let expr = Expr::Integer(1) * 2 * 1;
         assert_eq!(expr.to_string(), "(1*2*1)");
 
-        let expr = expand_mul_integers(expr.try_into().unwrap());
+        let expr = unwrap_changed(expand_mul_integers(expr.try_into().unwrap()));
         assert_eq!(expr.to_string(), "2");
     }
 
@@ -363,7 +380,7 @@ mod test {
         let expr = Expr::Integer(1) * x() * 0;
         assert_eq!(expr.to_string(), "(1*x*0)");
 
-        let expr = expand_mul_integers(expr.try_into().unwrap());
+        let expr = unwrap_changed(expand_mul_integers(expr.try_into().unwrap()));
         assert_eq!(expr.to_string(), "0");
     }
 
@@ -372,7 +389,7 @@ mod test {
         let expr = Expr::Integer(1) * x() * 1;
         assert_eq!(expr.to_string(), "(1*x*1)");
 
-        let expr = expand_mul_integers(expr.try_into().unwrap());
+        let expr = unwrap_changed(expand_mul_integers(expr.try_into().unwrap()));
         assert_eq!(expr.to_string(), "x");
     }
 
@@ -381,7 +398,7 @@ mod test {
         let expr = Expr::Integer(3) * x() * 2;
         assert_eq!(expr.to_string(), "(3*x*2)");
 
-        let expr = expand_mul_integers(expr.try_into().unwrap());
+        let expr = unwrap_changed(expand_mul_integers(expr.try_into().unwrap()));
         assert_eq!(expr.to_string(), "(x*6)");
     }
 }
