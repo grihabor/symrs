@@ -219,15 +219,17 @@ fn expand_mul_integers(mul: Mul) -> MaybeChanged {
             args
         }
     };
-    let variant = if len_before == args.len() {
-        Same
-    } else {
-        Changed
-    };
     match args.len() {
-        0 => variant(Expr::new(Expr::Integer(1))),
-        1 => variant(args.remove(0)),
-        _ => variant(Expr::new(Expr::Mul(Mul { args }))),
+        0 => Changed(Expr::new(Expr::Integer(1))),
+        1 => Changed(args.remove(0)),
+        _ => {
+            let variant = if len_before == args.len() {
+                Same
+            } else {
+                Changed
+            };
+            variant(Expr::new(Expr::Mul(Mul { args })))
+        }
     }
 }
 
