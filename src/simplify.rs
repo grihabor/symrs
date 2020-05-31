@@ -23,26 +23,60 @@ fn expand(expr_ptr: ExprPtr) -> ExprPtr {
         }
         Expr::Mul(mul) => {
             let args = expand_vec(mul.args);
-            let expanded_integers = *match expand_mul_integers(Mul { args }) {
-                Same(expr) => expr,
-                Changed(expr) => expr,
-            };
-            let expanded_mul = match expanded_integers {
-                Expr::Mul(mul) => expand_mul_add(mul),
-                expanded => Same(Expr::new(expanded)),
-            };
-            match expanded_mul {
+            match expand_mul_integers_add(Mul { args }) {
                 Changed(expr) => expand(expr),
                 Same(expr) => expr,
+            }
+        }
+        Expr::Ln(ln) => {
+            let arg = expand(ln.arg);
+            let expr = match expand_ln_mul(Ln { arg }) {
+                Same(expr) => return expr,
+                Changed(expr) => expr,
+            };
+            let expr = match *expr {
+                Expr::Add(add) => expand_add_integers(add),
+                expr => Same(Expr::new(expr)),
+            };
+            match expr {
+                Same(expr) => expr,
+                Changed(expr) => expr,
+            }
+        }
+        Expr::Exp(exp) => {
+            let arg = expand(exp.arg);
+            let changed_expr = match expand_exp_sum(Exp { arg }) {
+                Changed(expr) => expr,
+                Same(expr) => return expr,
+            };
+            let expr = match *changed_expr {
+                Expr::Mul(mul) => expand_mul_integers_add(mul),
+                expr => Same(Expr::new(expr)),
+            };
+            match expr {
+                Same(expr) => expr,
+                Changed(expr) => expr,
             }
         }
         expr => Expr::new(expr),
     }
 }
 
+fn expand_mul_integers_add(mul: Mul) -> MaybeChanged {
+    let expanded_integers = *match expand_mul_integers(mul) {
+        Same(expr) => expr,
+        Changed(expr) => expr,
+    };
+    let expanded_mul = match expanded_integers {
+        Expr::Mul(mul) => expand_mul_add(mul),
+        expanded => Same(Expr::new(expanded)),
+    };
+    expanded_mul
+}
+
 // https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/mul.py#L859
 // exp(x + y) => exp(x) * exp(y)
-fn expand_exp_sum(exp: Exp) -> Expr {
+fn expand_exp_sum(exp: Exp) -> MaybeChanged {
     match *exp.arg {
         Expr::Add(inner_add) => {
             let args = inner_add
@@ -50,9 +84,9 @@ fn expand_exp_sum(exp: Exp) -> Expr {
                 .into_iter()
                 .map(|inner_arg| Expr::new(Expr::new_exp(*inner_arg)))
                 .collect();
-            Expr::Mul(Mul { args })
+            Changed(Expr::new(Expr::Mul(Mul { args })))
         }
-        (arg) => Expr::new_exp(arg),
+        arg => Same(Expr::new(Expr::new_exp(arg))),
     }
 }
 
@@ -290,7 +324,7 @@ mod test {
         let expr = Expr::new_exp(x() + y() * 2);
         assert_eq!(expr.to_string(), "exp((x+(y*2)))");
 
-        let expr = expand_exp_sum(expr.try_into().unwrap());
+        let expr = unwrap_changed(expand_exp_sum(expr.try_into().unwrap()));
         assert_eq!(expr.to_string(), "(exp(x)*exp((y*2)))");
     }
 
