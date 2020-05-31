@@ -295,12 +295,39 @@ mod test {
     }
 
     #[test]
-    fn test_expand() {
+    fn test_expand_1() {
         let expr = (Expr::Integer(2) + y()) * (x() + 3);
         assert_eq!(expr.to_string(), "((2+y)*(x+3))");
 
         let expr = expand(Expr::new(expr));
         assert_eq!(expr.to_string(), "((y*x)+(y*3)+(x*2)+6)");
+    }
+
+    #[test]
+    fn test_expand_2() {
+        let expr = Expr::new_exp(Expr::Integer(2) * 3);
+        assert_eq!(expr.to_string(), "exp((2*3))");
+
+        let expr = expand(Expr::new(expr));
+        assert_eq!(expr.to_string(), "exp(6)");
+    }
+
+    #[test]
+    fn test_expand_3() {
+        let expr = Expr::new_exp(x() + y());
+        assert_eq!(expr.to_string(), "exp((x+y))");
+
+        let expr = expand(Expr::new(expr));
+        assert_eq!(expr.to_string(), "(exp(x)*exp(y))");
+    }
+
+    #[test]
+    fn test_expand_4() {
+        let expr = Expr::new_exp(Expr::new_ln(x() * y()));
+        assert_eq!(expr.to_string(), "exp(ln((x*y)))");
+
+        let expr = expand(Expr::new(expr));
+        assert_eq!(expr.to_string(), "(exp(ln(x))*exp(ln(y)))");
     }
 
     #[test]
