@@ -1,3 +1,4 @@
+mod modify;
 mod simplify;
 
 use num::Integer;

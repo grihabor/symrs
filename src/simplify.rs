@@ -1,82 +1,80 @@
-use crate::simplify::MaybeChanged::{Changed, Same};
+use crate::modify::Modify;
+use crate::modify::Modify::{Changed, Same};
 use crate::{Add, Exp, ExprPtr};
 use crate::{Expr, Symbol};
 use crate::{Ln, Mul};
 use std::collections::VecDeque;
+use std::env::var;
 use std::ops::Deref;
 use std::process::exit;
 
-fn expand_vec(args: Vec<ExprPtr>) -> Vec<ExprPtr> {
+fn expand_vec(args: Vec<ExprPtr>) -> Vec<ExprMod> {
     args.into_iter().map(|arg| expand(arg)).collect()
 }
 
+fn unwrap_vec(args: Vec<ExprMod>) -> Modify<Vec<ExprPtr>> {
+    args.into_iter()
+        .fold(Same(Vec::new()), |mut args, arg| match arg {
+            Same(expr) => match args {
+                Changed(mut args) => {
+                    args.push(expr);
+                    Changed(args)
+                }
+                Same(mut args) => {
+                    args.push(expr);
+                    Same(args)
+                }
+            },
+            Changed(expr) => {
+                let mut args = args.unwrap();
+                args.push(expr);
+                Changed(args)
+            }
+        })
+}
+
 // https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/function.py#L2451
-fn expand(expr_ptr: ExprPtr) -> ExprPtr {
+fn expand(expr_ptr: ExprPtr) -> ExprMod {
     let expr = *expr_ptr;
     match expr {
         Expr::Add(add) => {
-            let args = expand_vec(add.args);
-            match expand_add_integers(Add { args }) {
-                Same(expr) => expr,
-                Changed(expr) => expr,
-            }
+            unwrap_vec(expand_vec(add.args)).and_then(|args| expand_add_integers(Add { args }))
         }
-        Expr::Mul(mul) => {
-            let args = expand_vec(mul.args);
-            match expand_mul_integers_add(Mul { args }) {
-                Changed(expr) => expand(expr),
-                Same(expr) => expr,
-            }
-        }
-        Expr::Ln(ln) => {
-            let arg = expand(ln.arg);
-            let expr = match expand_ln_mul(Ln { arg }) {
-                Same(expr) => return expr,
-                Changed(expr) => expr,
-            };
-            let expr = match *expr {
-                Expr::Add(add) => expand_add_integers(add),
-                expr => Same(Expr::new(expr)),
-            };
-            match expr {
-                Same(expr) => expr,
-                Changed(expr) => expr,
-            }
-        }
-        Expr::Exp(exp) => {
-            let arg = expand(exp.arg);
-            let changed_expr = match expand_exp_sum(Exp { arg }) {
-                Changed(expr) => expr,
-                Same(expr) => return expr,
-            };
-            let expr = match *changed_expr {
-                Expr::Mul(mul) => expand_mul_integers_add(mul),
-                expr => Same(Expr::new(expr)),
-            };
-            match expr {
-                Same(expr) => expr,
-                Changed(expr) => expr,
-            }
-        }
-        expr => Expr::new(expr),
+        Expr::Mul(mul) => unwrap_vec(expand_vec(mul.args))
+            .and_then(|args| expand_mul_integers(Mul { args }))
+            .and_then(|expr| {
+                if let Expr::Mul(mul) = *expr {
+                    expand_mul_add(mul)
+                } else {
+                    Same(expr)
+                }
+            })
+            .if_changed(|expr| expand(expr)),
+        Expr::Ln(ln) => expand(ln.arg)
+            .and_then(|arg| expand_ln_mul(Ln { arg }))
+            .and_then(|expr| {
+                if let Expr::Add(add) = *expr {
+                    expand_add_integers(add)
+                } else {
+                    Same(expr)
+                }
+            }),
+        Expr::Exp(exp) => expand(exp.arg)
+            .and_then(|arg| expand_exp_sum(Exp { arg }))
+            .and_then(|expr| {
+                if let Expr::Exp(exp) = *expr {
+                    expand_exp_ln(exp)
+                } else {
+                    Same(expr)
+                }
+            })
+            .if_changed(expand),
+        expr => Same(Expr::new(expr)),
     }
 }
 
-fn expand_mul_integers_add(mul: Mul) -> MaybeChanged {
-    let expanded_integers = *match expand_mul_integers(mul) {
-        Same(expr) => expr,
-        Changed(expr) => expr,
-    };
-    let expanded_mul = match expanded_integers {
-        Expr::Mul(mul) => expand_mul_add(mul),
-        expanded => Same(Expr::new(expanded)),
-    };
-    expanded_mul
-}
-
-// https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/mul.py#L859
 // exp(x + y) => exp(x) * exp(y)
-fn expand_exp_sum(exp: Exp) -> MaybeChanged {
+fn expand_exp_sum(exp: Exp) -> ExprMod {
     match *exp.arg {
         Expr::Add(inner_add) => {
             let args = inner_add
@@ -90,8 +88,16 @@ fn expand_exp_sum(exp: Exp) -> MaybeChanged {
     }
 }
 
+// exp(ln(x)) => x
+fn expand_exp_ln(exp: Exp) -> ExprMod {
+    match *exp.arg {
+        Expr::Ln(ln) => Changed(ln.arg),
+        arg => Same(Expr::new(Expr::new_exp(arg))),
+    }
+}
+
 // ln(a * b) => ln(a) + ln(b)
-fn expand_ln_mul(ln: Ln) -> MaybeChanged {
+fn expand_ln_mul(ln: Ln) -> ExprMod {
     match *ln.arg {
         Expr::Mul(inner_mul) => {
             let args = inner_mul
@@ -120,14 +126,9 @@ where
     result
 }
 
-enum MaybeChanged {
-    Changed(ExprPtr),
-    Same(ExprPtr),
-}
-
 // https://github.com/sympy/sympy/blob/sympy-1.5.1/sympy/core/mul.py#L859
 // (a + b) * (c + d) => ac + ad + bc + bd
-fn expand_mul_add(mul: Mul) -> MaybeChanged {
+fn expand_mul_add(mul: Mul) -> ExprMod {
     // first, we need to separate sums from other args
     let (mul_sum_args, other_mul_args) = mul.args.into_iter().fold(
         (Vec::new(), Vec::new()),
@@ -197,7 +198,7 @@ fn expand_mul_add(mul: Mul) -> MaybeChanged {
 }
 
 // 3 + 2 + x => 5 + x
-fn expand_add_integers(add: Add) -> MaybeChanged {
+fn expand_add_integers(add: Add) -> ExprMod {
     let len_before = add.args.len();
     let (sum, mut args) = add
         .args
@@ -231,7 +232,7 @@ fn expand_add_integers(add: Add) -> MaybeChanged {
 }
 
 // 1 * x * 2 => x * 2
-fn expand_mul_integers(mul: Mul) -> MaybeChanged {
+fn expand_mul_integers(mul: Mul) -> ExprMod {
     let len_before = mul.args.len();
     let (product, mut args) =
         mul.args
@@ -267,11 +268,13 @@ fn expand_mul_integers(mul: Mul) -> MaybeChanged {
     }
 }
 
+type ExprMod = Modify<ExprPtr>;
+
 mod test {
-    use crate::simplify::MaybeChanged::Changed;
+    use crate::modify::Modify::Changed;
     use crate::simplify::{
         cross_product, expand, expand_add_integers, expand_exp_sum, expand_ln_mul, expand_mul_add,
-        expand_mul_integers, MaybeChanged,
+        expand_mul_integers, ExprMod,
     };
     use crate::{Add, Exp, Expr, ExprPtr, Ln, Mul, Symbol};
     use std::convert::TryInto;
@@ -286,7 +289,7 @@ mod test {
     fn z() -> Expr {
         Expr::Symbol("z".into())
     }
-    fn unwrap_changed(expr: MaybeChanged) -> ExprPtr {
+    fn unwrap_changed(expr: ExprMod) -> ExprPtr {
         if let Changed(expr) = expr {
             expr
         } else {
@@ -299,7 +302,7 @@ mod test {
         let expr = (Expr::Integer(2) + y()) * (x() + 3);
         assert_eq!(expr.to_string(), "((2+y)*(x+3))");
 
-        let expr = expand(Expr::new(expr));
+        let expr = unwrap_changed(expand(Expr::new(expr)));
         assert_eq!(expr.to_string(), "((y*x)+(y*3)+(x*2)+6)");
     }
 
@@ -308,7 +311,7 @@ mod test {
         let expr = Expr::new_exp(Expr::Integer(2) * 3);
         assert_eq!(expr.to_string(), "exp((2*3))");
 
-        let expr = expand(Expr::new(expr));
+        let expr = unwrap_changed(expand(Expr::new(expr)));
         assert_eq!(expr.to_string(), "exp(6)");
     }
 
@@ -317,7 +320,7 @@ mod test {
         let expr = Expr::new_exp(x() + y());
         assert_eq!(expr.to_string(), "exp((x+y))");
 
-        let expr = expand(Expr::new(expr));
+        let expr = unwrap_changed(expand(Expr::new(expr)));
         assert_eq!(expr.to_string(), "(exp(x)*exp(y))");
     }
 
@@ -326,8 +329,8 @@ mod test {
         let expr = Expr::new_exp(Expr::new_ln(x() * y()));
         assert_eq!(expr.to_string(), "exp(ln((x*y)))");
 
-        let expr = expand(Expr::new(expr));
-        assert_eq!(expr.to_string(), "(exp(ln(x))*exp(ln(y)))");
+        let expr = unwrap_changed(expand(Expr::new(expr)));
+        assert_eq!(expr.to_string(), "(x*y)");
     }
 
     #[test]
