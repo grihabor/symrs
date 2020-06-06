@@ -37,41 +37,46 @@ fn unwrap_vec(args: Vec<ExprMod>) -> Modify<Vec<ExprPtr>> {
 fn expand(expr_ptr: ExprPtr) -> ExprMod {
     let expr = *expr_ptr;
     match expr {
-        Expr::Add(add) => {
-            unwrap_vec(expand_vec(add.args)).and_then(|args| expand_add_integers(Add { args }))
-        }
+        Expr::Add(add) => unwrap_vec(expand_vec(add.args))
+            .and_then(|args| Same(Expr::new(Expr::Add(Add { args }))))
+            .and_then(expand_expr_add_integers)
+            .if_changed(expand),
         Expr::Mul(mul) => unwrap_vec(expand_vec(mul.args))
-            .and_then(|args| expand_mul_integers(Mul { args }))
-            .and_then(|expr| {
-                if let Expr::Mul(mul) = *expr {
-                    expand_mul_add(mul)
-                } else {
-                    Same(expr)
-                }
-            })
-            .if_changed(|expr| expand(expr)),
+            .and_then(|args| Same(Expr::new(Expr::Mul(Mul { args }))))
+            .and_then(expand_expr_mul_integers)
+            .and_then(expand_expr_mul_add)
+            .if_changed(expand),
         Expr::Ln(ln) => expand(ln.arg)
-            .and_then(|arg| expand_ln_mul(Ln { arg }))
-            .and_then(|expr| {
-                if let Expr::Add(add) = *expr {
-                    expand_add_integers(add)
-                } else {
-                    Same(expr)
-                }
-            }),
+            .and_then(|arg| Same(Expr::new(Expr::Ln(Ln { arg }))))
+            .and_then(expand_expr_ln_mul)
+            .if_changed(expand),
         Expr::Exp(exp) => expand(exp.arg)
-            .and_then(|arg| expand_exp_sum(Exp { arg }))
-            .and_then(|expr| {
-                if let Expr::Exp(exp) = *expr {
-                    expand_exp_ln(exp)
-                } else {
-                    Same(expr)
-                }
-            })
+            .and_then(|arg| Same(Expr::new(Expr::Exp(Exp { arg }))))
+            .and_then(expand_expr_exp_sum)
+            .and_then(expand_expr_exp_ln)
             .if_changed(expand),
         expr => Same(Expr::new(expr)),
     }
 }
+
+macro_rules! define_expand {
+    ( $fn_name:ident, Expr::$variant:ident, $fn_variant:ident ) => {
+        fn $fn_name(expr: ExprPtr) -> ExprMod {
+            if let Expr::$variant(wrapped) = *expr {
+                $fn_variant(wrapped)
+            } else {
+                Same(expr)
+            }
+        }
+    };
+}
+
+define_expand!(expand_expr_exp_sum, Expr::Exp, expand_exp_sum);
+define_expand!(expand_expr_exp_ln, Expr::Exp, expand_exp_ln);
+define_expand!(expand_expr_mul_integers, Expr::Mul, expand_mul_integers);
+define_expand!(expand_expr_mul_add, Expr::Mul, expand_mul_add);
+define_expand!(expand_expr_ln_mul, Expr::Ln, expand_ln_mul);
+define_expand!(expand_expr_add_integers, Expr::Add, expand_add_integers);
 
 // exp(x + y) => exp(x) * exp(y)
 fn expand_exp_sum(exp: Exp) -> ExprMod {
