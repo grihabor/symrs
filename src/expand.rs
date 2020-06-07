@@ -31,6 +31,14 @@ pub(crate) fn expand_exp_ln(exp: Exp) -> ExprMod {
     }
 }
 
+// ln(exp(x)) => x
+pub(crate) fn expand_ln_exp(ln: Ln) -> ExprMod {
+    match *ln.arg {
+        Expr::Exp(exp) => Changed(exp.arg),
+        arg => Same(Expr::new(Expr::new_ln(arg))),
+    }
+}
+
 // ln(a * b) => ln(a) + ln(b)
 pub(crate) fn expand_ln_mul(ln: Ln) -> ExprMod {
     match *ln.arg {
