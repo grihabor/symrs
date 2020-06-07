@@ -28,16 +28,6 @@ impl<T> Modify<T> {
         }
     }
 
-    pub(crate) fn if_same<F>(self, f: F) -> Modify<T>
-    where
-        F: FnOnce(T) -> Modify<T>,
-    {
-        match self {
-            Modify::Same(expr) => f(expr),
-            modify @ Modify::Changed(_) => modify,
-        }
-    }
-
     pub(crate) fn unwrap(self) -> T {
         match self {
             Modify::Same(res) => res,
