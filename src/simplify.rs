@@ -1,6 +1,6 @@
 use crate::expand::{
-    expand_add_integers, expand_exp_ln, expand_exp_sum, expand_ln_mul, expand_mul_add,
-    expand_mul_integers,
+    expand_add_integers, expand_exp_ln, expand_exp_sum, expand_ln_exp, expand_ln_mul,
+    expand_mul_add, expand_mul_integers,
 };
 use crate::modify::Modify;
 use crate::modify::Modify::{Changed, Same};
@@ -52,6 +52,7 @@ fn expand(expr_ptr: ExprPtr) -> ExprMod {
             .if_changed(expand),
         Expr::Ln(ln) => expand(ln.arg)
             .and_then(|arg| Same(Expr::new(Expr::Ln(Ln { arg }))))
+            .and_then(expand_expr_ln_exp)
             .and_then(expand_expr_ln_mul)
             .if_changed(expand),
         Expr::Exp(exp) => expand(exp.arg)
@@ -80,6 +81,7 @@ define_expand!(expand_expr_exp_ln, Expr::Exp, expand_exp_ln);
 define_expand!(expand_expr_mul_integers, Expr::Mul, expand_mul_integers);
 define_expand!(expand_expr_mul_add, Expr::Mul, expand_mul_add);
 define_expand!(expand_expr_ln_mul, Expr::Ln, expand_ln_mul);
+define_expand!(expand_expr_ln_exp, Expr::Ln, expand_ln_exp);
 define_expand!(expand_expr_add_integers, Expr::Add, expand_add_integers);
 
 mod test {
@@ -137,6 +139,15 @@ mod test {
     fn test_expand_4() {
         let expr = Expr::new_exp(Expr::new_ln(x() * y()));
         assert_eq!(expr.to_string(), "exp(ln((x*y)))");
+
+        let expr = unwrap_changed(expand(Expr::new(expr)));
+        assert_eq!(expr.to_string(), "(x*y)");
+    }
+
+    #[test]
+    fn test_expand_5() {
+        let expr = Expr::new_ln(Expr::new_exp(x() * y()));
+        assert_eq!(expr.to_string(), "ln(exp((x*y)))");
 
         let expr = unwrap_changed(expand(Expr::new(expr)));
         assert_eq!(expr.to_string(), "(x*y)");
