@@ -1,6 +1,8 @@
+mod expand;
 mod modify;
 mod simplify;
 
+use crate::modify::Modify;
 use num::Integer;
 use std::convert::TryFrom;
 use std::fmt::{Binary, Debug, Display, Error, Formatter, Pointer, Write};
@@ -85,6 +87,7 @@ fn fmt_func(f: &mut Formatter<'_>, name: &str, arg: &ExprPtr) -> std::fmt::Resul
 }
 
 type ExprPtr = Box<Expr>;
+type ExprMod = Modify<ExprPtr>;
 
 impl Expr {
     fn new(t: Expr) -> ExprPtr {
